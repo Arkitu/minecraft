@@ -3,7 +3,12 @@ use bevy::{prelude::*, utils::HashMap};
 #[derive(Component)]
 struct CameraMarker;
 
-fn setup_camera(mut commands: Commands) {
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>
+) {
+    // camera
     commands.spawn((
         Camera3dBundle {
             transform: Transform::from_xyz(10.0, 12.0, 16.0)
@@ -12,12 +17,8 @@ fn setup_camera(mut commands: Commands) {
         },
         CameraMarker,
     ));
-}
 
-/// set up a simple 3D scene
-fn setup_light(
-    mut commands: Commands
-) {
+    // sun light
     commands.spawn(PointLightBundle {
         point_light: PointLight {
             intensity: 1500.0,
@@ -27,13 +28,8 @@ fn setup_light(
         transform: Transform::from_xyz(4.0, 8.0, 4.0),
         ..default()
     });
-}
 
-fn setup_cube(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
+    // a random cube
     commands.spawn(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
         material: materials.add(Color::rgb_u8(124, 144, 255).into()),
@@ -42,25 +38,61 @@ fn setup_cube(
     });
 }
 
-enum Bloc {
-    Air,
+enum BlocType {
     Dirt,
     Stone
 }
 
-struct Chunk {
-    inner: [[[Bloc; 16]; 16]; 256]
+struct BlocPosition {
+    x: i32,
+    y: i32,
+    z: i32
 }
 
+struct ChunkPosition {
+    x: i32,
+    y: i32,
+    z: i32
+}
+
+/// use Option<Bloc>, there isn't any "air" bloc
+struct Bloc {
+    r#type: BlocType,
+    pos: BlocPosition
+}
+
+#[derive(Component)]
+struct Chunk {
+    inner: [[[Option<Entity>; 16]; 16]; 256],
+    pos: ChunkPosition
+}
+impl Chunk {
+    pub fn new(pos: ChunkPosition) -> Self {
+        Self {
+            inner: [[[None; 16]; 16]; 256],
+            pos
+        }
+    }
+}
+
+#[derive(Resource)]
 struct Chunks {
-    inner: HashMap<[isize; 3], Chunk>
+    inner: HashMap<ChunkPosition, Entity>,
+    seed: u64
+}
+impl Chunks {
+    pub fn new(seed: u64) -> Self {
+        Self {
+            inner: HashMap::new(),
+            seed
+        }
+    }
 }
 
 fn main() {
-
-
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_systems(Startup, (setup_camera, setup_light, setup_cube))
+        .add_systems(Startup, setup)
+        .insert_resource(Chunks::new(0))
         .run();
 }
