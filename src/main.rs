@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, utils::HashMap};
 
 #[derive(Component)]
 struct CameraMarker;
@@ -16,9 +16,7 @@ fn setup_camera(mut commands: Commands) {
 
 /// set up a simple 3D scene
 fn setup_light(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut commands: Commands
 ) {
     commands.spawn(PointLightBundle {
         point_light: PointLight {
@@ -44,7 +42,23 @@ fn setup_cube(
     });
 }
 
+enum Bloc {
+    Air,
+    Dirt,
+    Stone
+}
+
+struct Chunk {
+    inner: [[[Bloc; 16]; 16]; 256]
+}
+
+struct Chunks {
+    inner: HashMap<[isize; 3], Chunk>
+}
+
 fn main() {
+
+
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, (setup_camera, setup_light, setup_cube))
