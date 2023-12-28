@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use bevy::{prelude::*, utils::HashMap};
 
 #[derive(Component)]
@@ -30,54 +32,153 @@ fn setup(
     });
 
     // a random cube
+    // commands.spawn(PbrBundle {
+    //     mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+    //     material: materials.add(Color::rgb_u8(124, 144, 255).into()),
+    //     transform: Transform::from_xyz(0.0, 0.5, 0.0),
+    //     ..default()
+    // });
+}
+
+fn spawn_mesh_for_air(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    chunk: &Chunk,
+    pos: &PosInChunk
+) {
+    if let Some(_) = chunk.get(pos) {
+        return
+    }
+    for pos in [
+        PosInChunk {
+            x: pos.x-1,
+            y: pos.y,
+            z: pos.z
+        },
+        PosInChunk {
+            x: pos.x+1,
+            y: pos.y,
+            z: pos.z
+        },
+        PosInChunk {
+            x: pos.x,
+            y: pos.y-1,
+            z: pos.z
+        },
+        PosInChunk {
+            x: pos.x,
+            y: pos.y+1,
+            z: pos.z
+        },
+        PosInChunk {
+            x: pos.x,
+            y: pos.y,
+            z: pos.z-1
+        },
+        PosInChunk {
+            x: pos.x,
+            y: pos.y,
+            z: pos.z+1
+        }
+    ] {
+        let bloc = match chunk.get(&pos) {
+            Some(b) => b,
+            None => continue
+        };
+        let bloc = 
+        let texture_handle = asset_server.load();
+        
+    }
+
+    // load a texture
+    let texture_handle = asset_server.load("default_grass_side.png");
+
+    // create a new quad mesh. this is what we will apply the texture to
+    let quad_width = 8.0;
+    let quad_handle = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(
+        quad_width,
+        quad_width
+    ))));
+
+    // this material renders the texture normally
+    let material_handle = materials.add(StandardMaterial {
+        base_color_texture: Some(texture_handle.clone()),
+        alpha_mode: AlphaMode::Blend,
+        unlit: true,
+        ..default()
+    });
+
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-        material: materials.add(Color::rgb_u8(124, 144, 255).into()),
-        transform: Transform::from_xyz(0.0, 0.5, 0.0),
+        mesh: quad_handle.clone(),
+        material: material_handle,
+        transform: Transform::from_xyz(0.0, 0.0, 1.5)
+            .with_rotation(Quat::from_rotation_x(-PI / 5.0)),
         ..default()
     });
 }
 
+#[derive(Component, Clone, Copy)]
 enum BlocType {
     Dirt,
     Stone
 }
 
-struct BlocPosition {
-    x: i32,
-    y: i32,
-    z: i32
+impl BlocType {
+    pub fn get_asset_path(&self) -> &str {
+        match self {
+            &Self::Dirt => "default_grass_side.png",
+            &Self::Stone => "default_stone_bloc.png"
+        }
+    }
 }
 
-struct ChunkPosition {
-    x: i32,
-    y: i32,
-    z: i32
+/// Bloc position relative to the chunk corner
+#[derive(Component)]
+struct PosInChunk {
+    x: u16,
+    y: u16,
+    z: u16
 }
 
-/// use Option<Bloc>, there isn't any "air" bloc
+impl PosInChunk {
+    fn new(x: u16, y: u16, z: u16) -> Self { Self { x, y, z } }
+}
+
+/// Chunk position in chunk unit
+struct ChunkPos {
+    x: i16,
+    y: i16,
+    z: i16
+}
+
+#[derive(Bundle)]
 struct Bloc {
     r#type: BlocType,
-    pos: BlocPosition
+    pos: PosInChunk
 }
 
 #[derive(Component)]
 struct Chunk {
     inner: [[[Option<Entity>; 16]; 16]; 256],
-    pos: ChunkPosition
+    pos: ChunkPos
 }
 impl Chunk {
-    pub fn new(pos: ChunkPosition) -> Self {
+    pub fn new(pos: ChunkPos) -> Self {
         Self {
             inner: [[[None; 16]; 16]; 256],
             pos
         }
     }
+    pub fn get(&self, pos:&PosInChunk) -> Option<Entity> {
+        self.inner[pos.z as usize][pos.y as usize][pos.x as usize]
+    }
 }
 
 #[derive(Resource)]
 struct Chunks {
-    inner: HashMap<ChunkPosition, Entity>,
+    inner: HashMap<ChunkPos, Entity>,
     seed: u64
 }
 impl Chunks {
@@ -94,5 +195,6 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
         .insert_resource(Chunks::new(0))
+        .add_systems(Update, spawn_mesh_for_air)
         .run();
 }
