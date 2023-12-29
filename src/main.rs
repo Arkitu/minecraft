@@ -1,17 +1,20 @@
 use std::f32::consts::PI;
+use bevy::prelude::*;
 
-use bevy::{prelude::*, utils::HashMap};
+mod bloc_and_chunk;
+use bloc_and_chunk::*;
 
 #[derive(Component)]
 struct CameraMarker;
 
 fn setup(
-    mut commands: Commands,
+    mut cmds: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut chunks: ResMut<Chunks>
 ) {
     // camera
-    commands.spawn((
+    cmds.spawn((
         Camera3dBundle {
             transform: Transform::from_xyz(10.0, 12.0, 16.0)
                 .looking_at(Vec3::ZERO, Vec3::Y),
@@ -21,7 +24,7 @@ fn setup(
     ));
 
     // sun light
-    commands.spawn(PointLightBundle {
+    cmds.spawn(PointLightBundle {
         point_light: PointLight {
             intensity: 1500.0,
             shadows_enabled: true,
@@ -30,6 +33,12 @@ fn setup(
         transform: Transform::from_xyz(4.0, 8.0, 4.0),
         ..default()
     });
+
+    // chunks
+    let base_chunk = cmds.spawn(Chunk::new(
+        ChunkPos { x: 0, y: 0, z: 0 }
+    )).id();
+    chunks.insert(ChunkPos { x: 0, y: 0, z: 0 }, base_chunk);
 
     // a random cube
     // commands.spawn(PbrBundle {
@@ -87,8 +96,8 @@ fn spawn_mesh_for_air(
             Some(b) => b,
             None => continue
         };
-        let bloc = 
-        let texture_handle = asset_server.load();
+        // let bloc = ;
+        // let texture_handle = asset_server.load();
         
     }
 
@@ -119,82 +128,11 @@ fn spawn_mesh_for_air(
     });
 }
 
-#[derive(Component, Clone, Copy)]
-enum BlocType {
-    Dirt,
-    Stone
-}
-
-impl BlocType {
-    pub fn get_asset_path(&self) -> &str {
-        match self {
-            &Self::Dirt => "default_grass_side.png",
-            &Self::Stone => "default_stone_bloc.png"
-        }
-    }
-}
-
-/// Bloc position relative to the chunk corner
-#[derive(Component)]
-struct PosInChunk {
-    x: u16,
-    y: u16,
-    z: u16
-}
-
-impl PosInChunk {
-    fn new(x: u16, y: u16, z: u16) -> Self { Self { x, y, z } }
-}
-
-/// Chunk position in chunk unit
-struct ChunkPos {
-    x: i16,
-    y: i16,
-    z: i16
-}
-
-#[derive(Bundle)]
-struct Bloc {
-    r#type: BlocType,
-    pos: PosInChunk
-}
-
-#[derive(Component)]
-struct Chunk {
-    inner: [[[Option<Entity>; 16]; 16]; 256],
-    pos: ChunkPos
-}
-impl Chunk {
-    pub fn new(pos: ChunkPos) -> Self {
-        Self {
-            inner: [[[None; 16]; 16]; 256],
-            pos
-        }
-    }
-    pub fn get(&self, pos:&PosInChunk) -> Option<Entity> {
-        self.inner[pos.z as usize][pos.y as usize][pos.x as usize]
-    }
-}
-
-#[derive(Resource)]
-struct Chunks {
-    inner: HashMap<ChunkPos, Entity>,
-    seed: u64
-}
-impl Chunks {
-    pub fn new(seed: u64) -> Self {
-        Self {
-            inner: HashMap::new(),
-            seed
-        }
-    }
-}
-
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
         .insert_resource(Chunks::new(0))
-        .add_systems(Update, spawn_mesh_for_air)
+        //.add_systems(Update, spawn_mesh_for_air)
         .run();
 }
