@@ -1,5 +1,4 @@
-use std::f32::consts::PI;
-use bevy::prelude::*;
+use bevy::{prelude::*, window::ApplicationLifetime};
 
 mod bloc_and_chunk;
 use bloc_and_chunk::*;
@@ -7,17 +6,19 @@ use bloc_and_chunk::*;
 #[derive(Component)]
 struct CameraMarker;
 
+#[derive(Event)]
+struct Render;
+
 fn setup(
     mut cmds: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
     mut chunks: ResMut<Chunks>
 ) {
     // camera
     cmds.spawn((
         Camera3dBundle {
-            transform: Transform::from_xyz(10.0, 12.0, 16.0)
-                .looking_at(Vec3::ZERO, Vec3::Y),
+            transform: Transform::from_xyz(80.0, -96.0, 128.0)
+                .looking_at(Vec3::ZERO, Vec3::ZERO),
+            
             ..default()
         },
         CameraMarker,
@@ -34,105 +35,50 @@ fn setup(
         ..default()
     });
 
-    // chunks
-    let base_chunk = cmds.spawn(Chunk::new(
-        ChunkPos { x: 0, y: 0, z: 0 }
-    )).id();
-    chunks.insert(ChunkPos { x: 0, y: 0, z: 0 }, base_chunk);
+    let mut blocs = ChunkBlocs::default();
+    let bloc = cmds.spawn(BlocType::Grass).id();
+    blocs.set(&PosInChunk { x: 0, y: 0, z: 1 }, Some(bloc));
 
-    // a random cube
-    // commands.spawn(PbrBundle {
-    //     mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-    //     material: materials.add(Color::rgb_u8(124, 144, 255).into()),
-    //     transform: Transform::from_xyz(0.0, 0.5, 0.0),
-    //     ..default()
-    // });
+    // chunks
+    let base_chunk = Chunk::new_with_blocs(
+        ChunkPos { x: 0, y: 0, z: 0 },
+        blocs
+    );
+    let base_chunk_id = cmds.spawn(base_chunk).id();
+    chunks.insert(ChunkPos { x: 0, y: 0, z: 0 }, base_chunk_id);
 }
 
-fn spawn_mesh_for_air(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
+fn render(
+    mut ev_app_lifetime: EventReader<ApplicationLifetime>,
+    mut chunks_query: Query<(&ChunkBlocs, &mut ChunkFaces, &ChunkPos)>,
+    mut cmds: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    chunk: &Chunk,
-    pos: &PosInChunk
+    asset_server: Res<AssetServer>,
+    blocs_query: Query<&BlocType>,
 ) {
-    if let Some(_) = chunk.get(pos) {
+    let mut skip = true;
+    for e in ev_app_lifetime.read() {
+        if let ApplicationLifetime::Started = e {
+            skip = false;
+            break;
+        }
+    }
+    if skip {
         return
     }
-    for pos in [
-        PosInChunk {
-            x: pos.x-1,
-            y: pos.y,
-            z: pos.z
-        },
-        PosInChunk {
-            x: pos.x+1,
-            y: pos.y,
-            z: pos.z
-        },
-        PosInChunk {
-            x: pos.x,
-            y: pos.y-1,
-            z: pos.z
-        },
-        PosInChunk {
-            x: pos.x,
-            y: pos.y+1,
-            z: pos.z
-        },
-        PosInChunk {
-            x: pos.x,
-            y: pos.y,
-            z: pos.z-1
-        },
-        PosInChunk {
-            x: pos.x,
-            y: pos.y,
-            z: pos.z+1
-        }
-    ] {
-        let bloc = match chunk.get(&pos) {
-            Some(b) => b,
-            None => continue
-        };
-        // let bloc = ;
-        // let texture_handle = asset_server.load();
-        
+    dbg!("render");
+    for (blocs, mut faces, pos) in chunks_query.iter_mut() {
+        *faces = blocs.render(pos, &asset_server, &blocs_query, &mut meshes, &mut materials, &mut cmds);
     }
-
-    // load a texture
-    let texture_handle = asset_server.load("default_grass_side.png");
-
-    // create a new quad mesh. this is what we will apply the texture to
-    let quad_width = 8.0;
-    let quad_handle = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(
-        quad_width,
-        quad_width
-    ))));
-
-    // this material renders the texture normally
-    let material_handle = materials.add(StandardMaterial {
-        base_color_texture: Some(texture_handle.clone()),
-        alpha_mode: AlphaMode::Blend,
-        unlit: true,
-        ..default()
-    });
-
-    commands.spawn(PbrBundle {
-        mesh: quad_handle.clone(),
-        material: material_handle,
-        transform: Transform::from_xyz(0.0, 0.0, 1.5)
-            .with_rotation(Quat::from_rotation_x(-PI / 5.0)),
-        ..default()
-    });
 }
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_systems(Startup, setup)
+        .add_systems(Update, render)
+        .add_event::<Render>()
         .insert_resource(Chunks::new(0))
-        //.add_systems(Update, spawn_mesh_for_air)
         .run();
 }
