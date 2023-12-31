@@ -1,8 +1,10 @@
 use bevy::{prelude::*, utils::HashMap};
 
-pub const CHUNK_X: usize = 4;
-pub const CHUNK_Y: usize = 4;
-pub const CHUNK_Z: usize = 8;
+pub const CHUNK_X: usize = 4; // Right
+pub const CHUNK_Y: usize = 8; // Up
+pub const CHUNK_Z: usize = 4; // Front
+
+pub const SQUARE_UNIT: f32 = 8.0;
 
 #[derive(Component, Clone, Copy)]
 pub enum BlocType {
@@ -27,7 +29,7 @@ impl std::fmt::Display for BlocType {
 }
 
 /// Bloc position relative to the chunk corner
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Clone)]
 pub struct PosInChunk {
     pub x: u8,
     pub y: u8,
@@ -63,25 +65,28 @@ pub struct ChunkPos {
 #[derive(Component)]
 pub struct ChunkBlocs ([Option<Entity>; CHUNK_X*CHUNK_Y*CHUNK_Z]);
 
+#[derive(PartialEq)]
 enum Direction {
-    Up,
-    Down,
-    Right,
-    Left,
-    Front,
-    Back
+    Up, // +y
+    Down, // -y
+    Right, // +x
+    Left, // -x
+    Front, // +z
+    Back // -z
 }
 impl Direction {
     /// Return a tuple (to_add, to_remove) because it's usize and we can't return negative values
-    fn index_difference(&self) -> (usize, usize) {
+    fn get_other_coordinates(&self, pos:&PosInChunk) -> PosInChunk {
+        let mut new = pos.to_owned();
         match self {
-            Direction::Up => (CHUNK_X*CHUNK_Y, 0),
-            Direction::Down => (0, CHUNK_X*CHUNK_Y),
-            Direction::Right => (1, 0),
-            Direction::Left => (0, 1),
-            Direction::Front => (CHUNK_X, 0),
-            Direction::Back => (0, CHUNK_X)
+            Direction::Up => new.y += 1,
+            Direction::Down => new.y -= 1,
+            Direction::Right => new.x += 1,
+            Direction::Left => new.x -= 1,
+            Direction::Front => new.z += 1,
+            Direction::Back => new.z -= 1
         }
+        new
     }
     fn face_to_render_name(&self) -> &'static str {
         match self {
@@ -95,14 +100,22 @@ impl Direction {
     }
     fn looking_to(&self) -> Vec3 {
         match self {
-            _ => Vec3::ZERO,
             Direction::Up => Vec3::new(0.0, 1.0, 0.0),
-            _ => Vec3::ZERO
+            Direction::Down => Vec3::new(0.0, -1.0, 0.0),
+            Direction::Right => Vec3::new(1.0, 0.0, 0.0),
+            Direction::Left => Vec3::new(-1.0, 0.0, 0.0),
+            Direction::Front => Vec3::new(0.0, 0.0, 1.0),
+            Direction::Back => Vec3::new(0.0, 0.0, -1.0)
         }
     }
     fn transform(&self) -> (f32, f32, f32) {
         match self {
-            _ => (0.0, 0.0, 0.0)
+            Direction::Up => (0.0, 0.5, 0.0),
+            Direction::Down => (0.0, -0.5, 0.0),
+            Direction::Right => (0.5, 0.0, 0.0),
+            Direction::Left => (-0.5, 0.0, 0.0),
+            Direction::Front => (0.0, 0.0, 0.5),
+            Direction::Back => (0.0, 0.0, -0.5)
         }
     }
     pub fn list() -> [Direction; 6] {
@@ -143,25 +156,22 @@ impl ChunkBlocs {
             }
             let pos = PosInChunk::from_chunk_index(i);
             for direction in Direction::list() {
-                let (to_add, to_remove) = direction.index_difference();
-                let mut index = pos.to_chunk_index();
-                if to_remove > index {
+                if pos.x == 0 && direction == Direction::Left
+                || pos.x == CHUNK_X as u8 - 1 && direction == Direction::Right
+                || pos.y == 0 && direction == Direction::Down
+                || pos.y == CHUNK_Y as u8 - 1 && direction == Direction::Up
+                || pos.z == 0 && direction == Direction::Back
+                || pos.z == CHUNK_Z as u8 - 1 && direction == Direction::Front {
                     continue
                 }
-                index += to_add;
-                index -= to_remove;
-                if index >= self.0.len() {
-                    continue
-                }
-                if let Some(other_id) = self.get_raw(index) {
+                if let Some(other_id) = self.get(&direction.get_other_coordinates(&pos)) {
                     let other_bloc = blocs.get(other_id).expect("Trying to render a deleted bloc");
                     // load the texture
                     let texture_handle = asset_server.load(&format!("{}/{}.png", other_bloc.to_string(), direction.face_to_render_name()));
                     // create a new quad mesh. this is what we will apply the texture to
-                    let quad_width = 8.0;
                     let quad_handle = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(
-                        quad_width,
-                        quad_width
+                        SQUARE_UNIT,
+                        SQUARE_UNIT
                     ))));
                     let material_handle = materials.add(StandardMaterial {
                         base_color_texture: Some(texture_handle.clone()),
@@ -172,9 +182,9 @@ impl ChunkBlocs {
                         mesh: quad_handle.clone(),
                         material: material_handle,
                         transform: Transform::from_xyz(
-                            (chunk_pos.x as f32 + pos.x as f32 + x) * quad_width,
-                            (chunk_pos.y as f32 + pos.y as f32 + y) * quad_width,
-                            (chunk_pos.z as f32 + pos.z as f32 + z) * quad_width
+                            ((chunk_pos.x*CHUNK_X as i16) as f32 + pos.x as f32 + x) * SQUARE_UNIT,
+                            ((chunk_pos.y*CHUNK_Y as i16) as f32 + pos.y as f32 + y) * SQUARE_UNIT,
+                            ((chunk_pos.z*CHUNK_Z as i16) as f32 + pos.z as f32 + z) * SQUARE_UNIT
                         ).looking_to(direction.looking_to(), Vec3::ZERO),
                         ..default()
                     }).id();
