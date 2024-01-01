@@ -4,6 +4,11 @@ pub const CHUNK_X: usize = 4; // Right
 pub const CHUNK_Y: usize = 8; // Up
 pub const CHUNK_Z: usize = 4; // Front
 
+// The storage is bigger than the real chunk size because we need to render the faces of the blocs at the edge of the chunk
+pub const CHUNK_STORAGE_X: usize = CHUNK_X + 1;
+pub const CHUNK_STORAGE_Y: usize = CHUNK_Y + 2;
+pub const CHUNK_STORAGE_Z: usize = CHUNK_Z + 1;
+
 pub const SQUARE_UNIT: f32 = 8.0;
 
 #[derive(Component, Clone, Copy)]
@@ -38,14 +43,14 @@ pub struct PosInChunk {
 
 impl PosInChunk {
     pub fn to_chunk_index(&self) -> usize {
-        (self.x as usize)
-        + ((self.y as usize) * CHUNK_X)
-        + ((self.z as usize) * CHUNK_X * CHUNK_Y)
+        self.x as usize
+        + (self.y as usize * CHUNK_STORAGE_X)
+        + (self.z as usize * CHUNK_STORAGE_X * CHUNK_STORAGE_Y)
     }
     pub fn from_chunk_index(chunk_index: usize) -> Self {
-        let z = chunk_index / (CHUNK_Y*CHUNK_X);
-        let y = (chunk_index - (CHUNK_Y*CHUNK_X*z)) / CHUNK_X;
-        let x = chunk_index - (CHUNK_Y*CHUNK_X*z) - (CHUNK_X*y);
+        let z = chunk_index / (CHUNK_STORAGE_Y*CHUNK_STORAGE_X);
+        let y = (chunk_index - (CHUNK_STORAGE_Y*CHUNK_STORAGE_X*z)) / CHUNK_STORAGE_X;
+        let x = chunk_index - (CHUNK_STORAGE_Y*CHUNK_STORAGE_X*z) - (CHUNK_STORAGE_X*y);
         PosInChunk {
             x: x as u8,
             y: y as u8,
@@ -55,15 +60,12 @@ impl PosInChunk {
 }
 
 /// Chunk position in chunk unit
-#[derive(Component, Eq, Hash, PartialEq)]
+#[derive(Component, Eq, Hash, PartialEq, Clone, Copy)]
 pub struct ChunkPos {
     pub x: i16,
     pub y: i16,
     pub z: i16
 }
-
-#[derive(Component)]
-pub struct ChunkBlocs ([Option<Entity>; CHUNK_X*CHUNK_Y*CHUNK_Z]);
 
 #[derive(PartialEq)]
 enum Direction {
@@ -130,9 +132,12 @@ impl Direction {
     }
 }
 
+#[derive(Component)]
+pub struct ChunkBlocs ([Option<Entity>; CHUNK_STORAGE_X*CHUNK_STORAGE_Y*CHUNK_STORAGE_Z]);
+
 impl Default for ChunkBlocs {
     fn default() -> Self {
-        Self ([None; CHUNK_X*CHUNK_Y*CHUNK_Z])
+        Self ([None; CHUNK_STORAGE_X*CHUNK_STORAGE_Y*CHUNK_STORAGE_Z])
     }
 }
 impl ChunkBlocs {
@@ -146,6 +151,9 @@ impl ChunkBlocs {
         }
     }
     pub fn set(&mut self, pos:&PosInChunk, val: Option<Entity>) {
+        if pos.y == 0 || pos.y == CHUNK_STORAGE_Y as u8 - 1 {
+            panic!("Trying to set a bloc outside of the chunk")
+        }
         self.0[pos.to_chunk_index()] = val
     }
     pub fn render(&self, chunk_pos:&ChunkPos, asset_server: &Res<AssetServer>, blocs: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) -> ChunkFaces {
@@ -155,13 +163,16 @@ impl ChunkBlocs {
                 continue
             }
             let pos = PosInChunk::from_chunk_index(i);
+            if pos.x == CHUNK_X as u8 || pos.z == CHUNK_Z as u8 {
+                continue
+            }
             for direction in Direction::list() {
                 if pos.x == 0 && direction == Direction::Left
-                || pos.x == CHUNK_X as u8 - 1 && direction == Direction::Right
+                || pos.x == CHUNK_STORAGE_X as u8 - 1 && direction == Direction::Right
                 || pos.y == 0 && direction == Direction::Down
-                || pos.y == CHUNK_Y as u8 - 1 && direction == Direction::Up
+                || pos.y == CHUNK_STORAGE_Y as u8 - 1 && direction == Direction::Up
                 || pos.z == 0 && direction == Direction::Back
-                || pos.z == CHUNK_Z as u8 - 1 && direction == Direction::Front {
+                || pos.z == CHUNK_STORAGE_Z as u8 - 1 && direction == Direction::Front {
                     continue
                 }
                 if let Some(other_id) = self.get(&direction.get_other_coordinates(&pos)) {
@@ -244,7 +255,41 @@ impl Chunks {
     pub fn insert(&mut self, pos: ChunkPos, chunk: Entity) {
         self.inner.insert(pos, chunk);
     }
-    pub fn get(&self, pos: &ChunkPos) -> Option<&Entity> {
-        self.inner.get(pos)
+    pub fn get(&self, pos: ChunkPos) -> Option<&Entity> {
+        self.inner.get(&pos)
+    }
+    pub fn generate(&mut self, pos: ChunkPos, cmds: &mut Commands, chunks_query: &Query<(&ChunkPos, &ChunkBlocs)>) {
+        // return if there is already a chunk
+        if let Some(_) = self.get(pos) {
+            return
+        }
+        let mut blocs = ChunkBlocs::default();
+
+        for x in 1..(CHUNK_X as u8)-1 {
+            for z in 1..(CHUNK_Z as u8)-1 {
+                for y in 1..3 {
+                    blocs.set(&PosInChunk { x, y, z }, Some(cmds.spawn(BlocType::Stone).id()));
+                }
+                for y in 3..4 {
+                    blocs.set(&PosInChunk { x, y, z }, Some(cmds.spawn(BlocType::Grass).id()));
+                }
+            }
+        }
+
+        // right
+        match self.get(ChunkPos {
+            x: pos.x - 1,
+            y: pos.y,
+            z: pos.z
+        }) {
+            Some(right) => {
+                for y in 1..=CHUNK_Y {
+                    for z in 0..CHU
+                }
+            }
+
+        }
+
+        let chunk = Chunk::new_with_blocs(pos, blocs)
     }
 }

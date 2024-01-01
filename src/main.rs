@@ -1,6 +1,6 @@
 use bevy::{prelude::*, window::ApplicationLifetime};
 
-mod bloc_and_chunk;
+pub mod bloc_and_chunk;
 use bloc_and_chunk::*;
 
 #[derive(Component)]
@@ -26,18 +26,34 @@ fn setup(
         CameraMarker,
     ));
 
-    // sun light
-    cmds.spawn(PointLightBundle {
-        point_light: PointLight {
-            intensity: 1500.0,
+    // directional 'sun' light
+    cmds.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
             shadows_enabled: true,
+            illuminance: 10000.0,
+            color: Color::rgb(1.0, 1.0, 0.75),
             ..default()
         },
-        transform: Transform::from_xyz(8.0, 8.0, 8.0),
+        transform: Transform {
+            translation: Vec3::new(0.0, 2.0, 0.0),
+            ..default()
+        }.looking_to(Vec3 { x: 0.5, y: -0.5, z: 0.3 }, Vec3::ZERO),
         ..default()
     });
 
     let mut blocs = ChunkBlocs::default();
+
+    for x in 0..(CHUNK_X as u8)-1 {
+        for z in 0..(CHUNK_Z as u8)-1 {
+            for y in 1..3 {
+                blocs.set(&PosInChunk { x, y, z }, Some(cmds.spawn(BlocType::Stone).id()));
+            }
+            for y in 3..4 {
+                blocs.set(&PosInChunk { x, y, z }, Some(cmds.spawn(BlocType::Grass).id()));
+            }
+        }
+    }
+
     let bloc = cmds.spawn(BlocType::Grass).id();
     blocs.set(&PosInChunk { x: 1, y: 1, z: 1 }, Some(bloc));
 
