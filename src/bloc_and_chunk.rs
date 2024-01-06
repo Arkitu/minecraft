@@ -4,18 +4,14 @@ pub const CHUNK_X: usize = 4; // Right
 pub const CHUNK_Y: usize = 8; // Up
 pub const CHUNK_Z: usize = 4; // Front
 
-// The storage is bigger than the real chunk size because we need to render the faces of the blocs at the edge of the chunk
-pub const CHUNK_STORAGE_X: usize = CHUNK_X + 1;
-pub const CHUNK_STORAGE_Y: usize = CHUNK_Y + 2;
-pub const CHUNK_STORAGE_Z: usize = CHUNK_Z + 1;
-
 pub const SQUARE_UNIT: f32 = 8.0;
 
-#[derive(Component, Clone, Copy)]
+#[derive(Component, Clone, Copy, PartialEq)]
 pub enum BlocType {
     Dirt,
     Grass,
-    Stone
+    Stone,
+    Air
 }
 
 impl Into<&str> for &BlocType {
@@ -23,13 +19,104 @@ impl Into<&str> for &BlocType {
         match self {
             BlocType::Dirt => "dirt",
             BlocType::Grass => "grass",
-            BlocType::Stone => "stone"
+            BlocType::Stone => "stone",
+            BlocType::Air => "air"
         }
     }
 }
 impl std::fmt::Display for BlocType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.into())
+    }
+}
+
+/// Absolute position of a bloc
+#[derive(Component, Debug, Clone)]
+pub struct Pos {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32
+}
+
+#[derive(Component)]
+pub struct Neighbors {
+    up: Entity,
+    down: Entity,
+    right: Entity,
+    left: Entity,
+    front: Entity,
+    back: Entity
+}
+impl Neighbors {
+    fn get_with_direction(&self, direction:&Direction) -> Entity {
+        match direction {
+            Direction::Up => self.up,
+            Direction::Down => self.down,
+            Direction::Right => self.right,
+            Direction::Left => self.left,
+            Direction::Front => self.front,
+            Direction::Back => self.back
+        }
+    }
+}
+
+#[derive(Component)]
+struct BlocFaces (Vec<Entity>);
+
+#[derive(Bundle)]
+pub struct Bloc {
+    pos: Pos,
+    neighbors: Neighbors,
+    r#type: BlocType,
+    faces: BlocFaces
+}
+
+impl Bloc {
+    fn render(&self, asset_server: &Res<AssetServer>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
+        render_bloc(&self.pos, &self.neighbors, &self.r#type, &self.faces, asset_server, bloc_types_query, meshes, materials, cmds)
+    }
+}
+
+pub fn render_bloc(
+    pos: &Pos,
+    neighbors: &Neighbors,
+    r#type: &BlocType,
+    faces: &BlocFaces,
+    asset_server: &Res<AssetServer>,
+    bloc_types_query: &Query<&BlocType>,
+    meshes: &mut ResMut<'_, Assets<Mesh>>,
+    materials: &mut ResMut<'_, Assets<StandardMaterial>>,
+    cmds: &mut Commands
+) {
+    let mut faces: Vec<Entity> = Vec::new();
+    for direction in Direction::list() {
+        let neighbor = bloc_types_query.get(neighbors.get_with_direction(&direction)).unwrap();
+        if neighbor != &BlocType::Air {
+            continue
+        }
+        // load the texture
+        let texture_handle = asset_server.load(&format!("{}/{}.png", r#type.to_string(), direction.face_to_render_name()));
+        // create a new quad mesh. this is what we will apply the texture to
+        let quad_handle = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(
+            SQUARE_UNIT,
+            SQUARE_UNIT
+        ))));
+        let material_handle = materials.add(StandardMaterial {
+            base_color_texture: Some(texture_handle.clone()),
+            ..default()
+        });
+        let (x, y, z) = direction.transform();
+        let id = cmds.spawn(PbrBundle {
+            mesh: quad_handle.clone(),
+            material: material_handle,
+            transform: Transform::from_xyz(
+                (pos.x as f32 + x) * SQUARE_UNIT,
+                (pos.y as f32 + y) * SQUARE_UNIT,
+                (pos.z as f32 + z) * SQUARE_UNIT
+            ).looking_to(direction.looking_to(), Vec3::ZERO),
+            ..default()
+        }).id();
+        faces.push(id);
     }
 }
 
@@ -44,13 +131,13 @@ pub struct PosInChunk {
 impl PosInChunk {
     pub fn to_chunk_index(&self) -> usize {
         self.x as usize
-        + (self.y as usize * CHUNK_STORAGE_X)
-        + (self.z as usize * CHUNK_STORAGE_X * CHUNK_STORAGE_Y)
+        + (self.y as usize * CHUNK_X)
+        + (self.z as usize * CHUNK_X * CHUNK_Y)
     }
     pub fn from_chunk_index(chunk_index: usize) -> Self {
-        let z = chunk_index / (CHUNK_STORAGE_Y*CHUNK_STORAGE_X);
-        let y = (chunk_index - (CHUNK_STORAGE_Y*CHUNK_STORAGE_X*z)) / CHUNK_STORAGE_X;
-        let x = chunk_index - (CHUNK_STORAGE_Y*CHUNK_STORAGE_X*z) - (CHUNK_STORAGE_X*y);
+        let z = chunk_index / (CHUNK_Y*CHUNK_X);
+        let y = (chunk_index - (CHUNK_Y*CHUNK_X*z)) / CHUNK_X;
+        let x = chunk_index - (CHUNK_Y*CHUNK_X*z) - (CHUNK_X*y);
         PosInChunk {
             x: x as u8,
             y: y as u8,
@@ -77,7 +164,6 @@ enum Direction {
     Back // -z
 }
 impl Direction {
-    /// Return a tuple (to_add, to_remove) because it's usize and we can't return negative values
     fn get_other_coordinates(&self, pos:&PosInChunk) -> PosInChunk {
         let mut new = pos.to_owned();
         match self {
@@ -92,12 +178,12 @@ impl Direction {
     }
     fn face_to_render_name(&self) -> &'static str {
         match self {
-            Direction::Up => "bottom",
-            Direction::Down => "top",
-            Direction::Right => "left",
-            Direction::Left => "right",
-            Direction::Front => "back",
-            Direction::Back => "front"
+            Direction::Up => "top",
+            Direction::Down => "bottom",
+            Direction::Right => "right",
+            Direction::Left => "left",
+            Direction::Front => "front",
+            Direction::Back => "back"
         }
     }
     fn looking_to(&self) -> Vec3 {
@@ -133,78 +219,87 @@ impl Direction {
 }
 
 #[derive(Component)]
-pub struct ChunkBlocs ([Option<Entity>; CHUNK_STORAGE_X*CHUNK_STORAGE_Y*CHUNK_STORAGE_Z]);
+pub struct ChunkBlocs ([Entity; CHUNK_X*CHUNK_Y*CHUNK_Z]);
 
-impl Default for ChunkBlocs {
-    fn default() -> Self {
-        Self ([None; CHUNK_STORAGE_X*CHUNK_STORAGE_Y*CHUNK_STORAGE_Z])
-    }
-}
 impl ChunkBlocs {
-    pub fn get(&self, pos:&PosInChunk) -> Option<Entity> {
-        self.get_raw(pos.to_chunk_index())
+    pub fn new(inner: [Entity; CHUNK_X*CHUNK_Y*CHUNK_Z]) -> Self {
+        Self(inner)
     }
-    pub fn get_raw(&self, index:usize) -> Option<Entity> {
-        match self.0.get(index) {
-            None | Some(None) => None,
-            Some(Some(b)) => Some(*b)
-        }
+    pub fn new_empty(pos: &ChunkPos, cmds: &mut Commands) -> Self {
+        let mut x = 0;
+        let mut y = 0;
+        let mut z = 0;
+        let inner = [{
+            cmds.spawn(Bloc {
+                pos: Pos {
+                    x: (pos.x*CHUNK_X) + x,
+                    y: (pos.y*CHUNK_Y) + y,
+                    z: (pos.z*CHUNK_Z) + z
+                },
+                
+            })
+        }; CHUNK_X*CHUNK_Y*CHUNK_Z];
     }
-    pub fn set(&mut self, pos:&PosInChunk, val: Option<Entity>) {
-        if pos.y == 0 || pos.y == CHUNK_STORAGE_Y as u8 - 1 {
-            panic!("Trying to set a bloc outside of the chunk")
-        }
-        self.0[pos.to_chunk_index()] = val
+    pub fn get(&self, pos:&PosInChunk) -> Option<&Entity> {
+        self.0.get(pos.to_chunk_index())
     }
-    pub fn render(&self, chunk_pos:&ChunkPos, asset_server: &Res<AssetServer>, blocs: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) -> ChunkFaces {
-        let mut faces = Vec::new();
-        for (i, bloc) in self.0.iter().enumerate() {
-            if bloc.is_some() {
-                continue
-            }
-            let pos = PosInChunk::from_chunk_index(i);
-            if pos.x == CHUNK_X as u8 || pos.z == CHUNK_Z as u8 {
-                continue
-            }
-            for direction in Direction::list() {
-                if pos.x == 0 && direction == Direction::Left
-                || pos.x == CHUNK_STORAGE_X as u8 - 1 && direction == Direction::Right
-                || pos.y == 0 && direction == Direction::Down
-                || pos.y == CHUNK_STORAGE_Y as u8 - 1 && direction == Direction::Up
-                || pos.z == 0 && direction == Direction::Back
-                || pos.z == CHUNK_STORAGE_Z as u8 - 1 && direction == Direction::Front {
-                    continue
-                }
-                if let Some(other_id) = self.get(&direction.get_other_coordinates(&pos)) {
-                    let other_bloc = blocs.get(other_id).expect("Trying to render a deleted bloc");
-                    // load the texture
-                    let texture_handle = asset_server.load(&format!("{}/{}.png", other_bloc.to_string(), direction.face_to_render_name()));
-                    // create a new quad mesh. this is what we will apply the texture to
-                    let quad_handle = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(
-                        SQUARE_UNIT,
-                        SQUARE_UNIT
-                    ))));
-                    let material_handle = materials.add(StandardMaterial {
-                        base_color_texture: Some(texture_handle.clone()),
-                        ..default()
-                    });
-                    let (x, y, z) = direction.transform();
-                    let id = cmds.spawn(PbrBundle {
-                        mesh: quad_handle.clone(),
-                        material: material_handle,
-                        transform: Transform::from_xyz(
-                            ((chunk_pos.x*CHUNK_X as i16) as f32 + pos.x as f32 + x) * SQUARE_UNIT,
-                            ((chunk_pos.y*CHUNK_Y as i16) as f32 + pos.y as f32 + y) * SQUARE_UNIT,
-                            ((chunk_pos.z*CHUNK_Z as i16) as f32 + pos.z as f32 + z) * SQUARE_UNIT
-                        ).looking_to(direction.looking_to(), Vec3::ZERO),
-                        ..default()
-                    }).id();
-                    faces.push(id);
-                }
-            }
+    pub fn set(&mut self, pos:&PosInChunk, val: Entity) {
+        self.0[pos.to_chunk_index()] = val;
+    }
+    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &Query<(&Pos,&Neighbors,&BlocType,&BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
+        for bloc in self.0.iter() {
+            let (pos,neighbors,r#type,faces) = blocs.get(*bloc).expect("Cannot find bloc from chunk");
+            render_bloc(pos, neighbors, r#type, faces, asset_server, bloc_types_query, meshes, materials, cmds);
         }
+        
+        // let mut faces = Vec::new();
+        // for (i, bloc) in self.0.iter().enumerate() {
+        //     if bloc.is_some() {
+        //         continue
+        //     }
+        //     let pos = PosInChunk::from_chunk_index(i);
+        //     if pos.x == CHUNK_X as u8 || pos.z == CHUNK_Z as u8 {
+        //         continue
+        //     }
+        //     for direction in Direction::list() {
+        //         if pos.x == 0 && direction == Direction::Left
+        //         || pos.x == CHUNK_X as u8 - 1 && direction == Direction::Right
+        //         || pos.y == 0 && direction == Direction::Down
+        //         || pos.y == CHUNK_Y as u8 - 1 && direction == Direction::Up
+        //         || pos.z == 0 && direction == Direction::Back
+        //         || pos.z == CHUNK_Z as u8 - 1 && direction == Direction::Front {
+        //             continue
+        //         }
+        //         if let Some(other_id) = self.get(&direction.get_other_coordinates(&pos)) {
+        //             let other_bloc = blocs.get(other_id).expect("Trying to render a deleted bloc");
+        //             // load the texture
+        //             let texture_handle = asset_server.load(&format!("{}/{}.png", other_bloc.to_string(), direction.face_to_render_name()));
+        //             // create a new quad mesh. this is what we will apply the texture to
+        //             let quad_handle = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(
+        //                 SQUARE_UNIT,
+        //                 SQUARE_UNIT
+        //             ))));
+        //             let material_handle = materials.add(StandardMaterial {
+        //                 base_color_texture: Some(texture_handle.clone()),
+        //                 ..default()
+        //             });
+        //             let (x, y, z) = direction.transform();
+        //             let id = cmds.spawn(PbrBundle {
+        //                 mesh: quad_handle.clone(),
+        //                 material: material_handle,
+        //                 transform: Transform::from_xyz(
+        //                     ((chunk_pos.x*CHUNK_X as i16) as f32 + pos.x as f32 + x) * SQUARE_UNIT,
+        //                     ((chunk_pos.y*CHUNK_Y as i16) as f32 + pos.y as f32 + y) * SQUARE_UNIT,
+        //                     ((chunk_pos.z*CHUNK_Z as i16) as f32 + pos.z as f32 + z) * SQUARE_UNIT
+        //                 ).looking_to(direction.looking_to(), Vec3::ZERO),
+        //                 ..default()
+        //             }).id();
+        //             faces.push(id);
+        //         }
+        //     }
+        // }
 
-        return ChunkFaces(faces)
+        // return ChunkFaces(faces)
     }
 }
 
@@ -214,29 +309,26 @@ pub struct ChunkFaces (Vec<Entity>);
 #[derive(Bundle)]
 pub struct Chunk {
     blocs: ChunkBlocs,
-    faces: ChunkFaces,
     pos: ChunkPos
 }
 impl Chunk {
     pub fn new_empty(pos: ChunkPos) -> Self {
         Self {
             pos,
-            faces: ChunkFaces::default(),
-            blocs: ChunkBlocs::default()
+            blocs: ChunkBlocs::new()
         }
     }
     pub fn new_with_blocs(pos: ChunkPos, blocs: ChunkBlocs) -> Self {
         Self {
             pos,
-            blocs,
-            faces: ChunkFaces::default()
+            blocs
         }
     }
-    pub fn get(&self, pos:&PosInChunk) -> Option<Entity> {
+    pub fn get(&self, pos:&PosInChunk) -> Option<&Entity> {
         self.blocs.get(pos)
     }
-    pub fn render(&mut self, asset_server: &Res<AssetServer>, blocs: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
-        self.faces = self.blocs.render(&self.pos, asset_server, blocs, meshes, materials, cmds);
+    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &Query<(&Pos,&Neighbors,&BlocType,&BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
+        self.blocs.render(asset_server, blocs, bloc_types_query, meshes, materials, cmds);
     }
 }
 
@@ -276,20 +368,6 @@ impl Chunks {
             }
         }
 
-        // right
-        match self.get(ChunkPos {
-            x: pos.x - 1,
-            y: pos.y,
-            z: pos.z
-        }) {
-            Some(right) => {
-                for y in 1..=CHUNK_Y {
-                    for z in 0..CHU
-                }
-            }
-
-        }
-
-        let chunk = Chunk::new_with_blocs(pos, blocs)
+        let chunk = Chunk::new_with_blocs(pos, blocs);
     }
 }
