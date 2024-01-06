@@ -1,4 +1,5 @@
 use bevy::{prelude::*, utils::HashMap};
+use arr_macro::arr;
 
 pub const CHUNK_X: usize = 4; // Right
 pub const CHUNK_Y: usize = 8; // Up
@@ -62,6 +63,12 @@ impl Neighbors {
 
 #[derive(Component)]
 struct BlocFaces (Vec<Entity>);
+
+impl Default for BlocFaces {
+    fn default() -> Self {
+        Self(Vec::new())
+    }
+}
 
 #[derive(Bundle)]
 pub struct Bloc {
@@ -153,6 +160,15 @@ pub struct ChunkPos {
     pub y: i16,
     pub z: i16
 }
+impl Into<Pos> for ChunkPos {
+    fn into(self) -> Pos {
+        Pos {
+            x: self.x as i32 * CHUNK_X as i32,
+            y: self.y as i32 * CHUNK_Y as i32,
+            z: self.z as i32 * CHUNK_Z as i32
+        }
+    }
+}
 
 #[derive(PartialEq)]
 enum Direction {
@@ -225,20 +241,32 @@ impl ChunkBlocs {
     pub fn new(inner: [Entity; CHUNK_X*CHUNK_Y*CHUNK_Z]) -> Self {
         Self(inner)
     }
-    pub fn new_empty(pos: &ChunkPos, cmds: &mut Commands) -> Self {
-        let mut x = 0;
-        let mut y = 0;
-        let mut z = 0;
-        let inner = [{
-            cmds.spawn(Bloc {
-                pos: Pos {
-                    x: (pos.x*CHUNK_X) + x,
-                    y: (pos.y*CHUNK_Y) + y,
-                    z: (pos.z*CHUNK_Z) + z
-                },
-                
-            })
-        }; CHUNK_X*CHUNK_Y*CHUNK_Z];
+    pub fn new_empty(chunk_pos: ChunkPos, cmds: &mut Commands) -> Self {
+        let mut entities = arr![{
+            cmds.spawn_empty()
+        }; 128]; // CHUNK_X*CHUNK_Y*CHUNK_Z
+        for x in 0..CHUNK_X as u8 {
+            for y in 0..CHUNK_Y as u8 {
+                for z in 0..CHUNK_Z as u8 {
+                    let pos_in_chunk = PosInChunk {
+                        x,
+                        y,
+                        z
+                    };
+                    let mut pos: Pos = chunk_pos.into();
+                    pos.x += x as i32;
+                    pos.y += y as i32;
+                    pos.z += z as i32;
+                    let bloc = Bloc {
+                        pos,
+                        neighbors: Neighbors {
+                            up: entities[pos_in_chunk.to_chunk_index()-]
+                        }
+                    }
+                }
+            }
+        }
+        Self
     }
     pub fn get(&self, pos:&PosInChunk) -> Option<&Entity> {
         self.0.get(pos.to_chunk_index())

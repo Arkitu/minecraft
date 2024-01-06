@@ -9,6 +9,7 @@ edition = "2021"
 bevy = { version = "0.12.0", features = ["dynamic_linking"] }
 bevy-inspector-egui = "0.22.1"
 bevy_editor_pls = "0.7.0"
+arr_macro = "0.2.1"
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]
