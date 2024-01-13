@@ -41,7 +41,7 @@ fn setup(
         ..default()
     });
 
-    let mut blocs = ChunkBlocs::default();
+    let mut blocs = ChunkBlocs::new_empty(ChunkPos { x: 0, y: 0, z: 0 }, &mut cmds);
 
     for x in 0..(CHUNK_X as u8)-1 {
         for z in 0..(CHUNK_Z as u8)-1 {
