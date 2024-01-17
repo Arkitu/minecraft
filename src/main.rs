@@ -16,16 +16,7 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>
 ) {
     // camera
-    cmds.spawn((
-        Player::new()
-        // Camera3dBundle {
-        //     transform: Transform::from_xyz(40.0, 48.0, 64.0)
-        //         .looking_at(Vec3::ZERO, Vec3::ZERO),
-            
-        //     ..default()
-        // },
-        // CameraMarker,
-    ));
+    cmds.spawn(Player::new());
 
     // directional 'sun' light
     cmds.spawn(DirectionalLightBundle {
