@@ -39,7 +39,7 @@ pub struct Pos {
     pub z: i32
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Neighbors {
     up: Option<Entity>,
     down: Option<Entity>,
@@ -61,8 +61,11 @@ impl Neighbors {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct BlocFaces (Vec<Entity>);
+
+#[derive(Component, Debug)]
+pub struct Face;
 
 impl Default for BlocFaces {
     fn default() -> Self {
@@ -79,8 +82,8 @@ pub struct Bloc {
 }
 
 impl Bloc {
-    fn render(&self, asset_server: &Res<AssetServer>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
-        render_bloc(&self.pos, &self.neighbors, &self.r#type, &self.faces, asset_server, bloc_types_query, meshes, materials, cmds)
+    fn render(&mut self, asset_server: &Res<AssetServer>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
+        render_bloc(&self.pos, &self.neighbors, &self.r#type, &mut self.faces, asset_server, bloc_types_query, meshes, materials, cmds)
     }
 }
 
@@ -88,13 +91,16 @@ pub fn render_bloc(
     pos: &Pos,
     neighbors: &Neighbors,
     r#type: &BlocType,
-    faces: &BlocFaces,
+    old_faces: &mut BlocFaces,
     asset_server: &Res<AssetServer>,
     bloc_types_query: &Query<&BlocType>,
     meshes: &mut ResMut<'_, Assets<Mesh>>,
     materials: &mut ResMut<'_, Assets<StandardMaterial>>,
     cmds: &mut Commands
 ) {
+    if let BlocType::Air = r#type {
+        return
+    }
     let mut faces: Vec<Entity> = Vec::new();
     for direction in Direction::list() {
         let neighbor = match neighbors.get_with_direction(&direction) {
@@ -128,6 +134,10 @@ pub fn render_bloc(
         }).id();
         faces.push(id);
     }
+    for f in old_faces.0.iter() {
+        cmds.entity(*f).despawn()
+    }
+    *old_faces = BlocFaces(faces);
 }
 
 /// Bloc position relative to the chunk corner
@@ -210,12 +220,12 @@ impl Direction {
     }
     fn looking_to(&self) -> Vec3 {
         match self {
-            Direction::Up => Vec3::new(0.0, 1.0, 0.0),
-            Direction::Down => Vec3::new(0.0, -1.0, 0.0),
-            Direction::Right => Vec3::new(1.0, 0.0, 0.0),
-            Direction::Left => Vec3::new(-1.0, 0.0, 0.0),
-            Direction::Front => Vec3::new(0.0, 0.0, 1.0),
-            Direction::Back => Vec3::new(0.0, 0.0, -1.0)
+            Direction::Up => Vec3::new(0.0, -1.0, 0.0),
+            Direction::Down => Vec3::new(0.0, 1.0, 0.0),
+            Direction::Right => Vec3::new(-1.0, 0.0, 0.0),
+            Direction::Left => Vec3::new(1.0, 0.0, 0.0),
+            Direction::Front => Vec3::new(0.0, 0.0, -1.0),
+            Direction::Back => Vec3::new(0.0, 0.0, 1.0)
         }
     }
     fn transform(&self) -> (f32, f32, f32) {
@@ -251,9 +261,9 @@ impl ChunkBlocs {
         let entities = arr![{
             cmds.spawn_empty().id()
         }; 128]; // CHUNK_X*CHUNK_Y*CHUNK_Z
-        for x in 1..(CHUNK_X-1) as u8 {
+        for x in 0..CHUNK_X as u8 {
             for y in 0..CHUNK_Y as u8 {
-                for z in 1..(CHUNK_Z-1) as u8 {
+                for z in 0..CHUNK_Z as u8 {
                     let pos_in_chunk = PosInChunk {
                         x,
                         y,
@@ -267,7 +277,7 @@ impl ChunkBlocs {
                     let bloc = Bloc {
                         pos,
                         neighbors: Neighbors {
-                            up: if y == (CHUNK_Z-1) as u8 {
+                            up: if y == (CHUNK_Y-1) as u8 {
                                 None
                             } else {
                                 Some(entities[pos_in_chunk.to_neighbor(Direction::Up).to_chunk_index()])
@@ -277,10 +287,26 @@ impl ChunkBlocs {
                             } else {
                                 Some(entities[pos_in_chunk.to_neighbor(Direction::Down).to_chunk_index()])
                             },
-                            right: Some(entities[pos_in_chunk.to_neighbor(Direction::Right).to_chunk_index()]),
-                            left: Some(entities[pos_in_chunk.to_neighbor(Direction::Left).to_chunk_index()]),
-                            front: Some(entities[pos_in_chunk.to_neighbor(Direction::Front).to_chunk_index()]),
-                            back: Some(entities[pos_in_chunk.to_neighbor(Direction::Back).to_chunk_index()])
+                            right: if x == (CHUNK_X-1) as u8 {
+                                None
+                            } else {
+                                Some(entities[pos_in_chunk.to_neighbor(Direction::Right).to_chunk_index()])
+                            },
+                            left: if x == 0 {
+                                None
+                            } else {
+                                Some(entities[pos_in_chunk.to_neighbor(Direction::Left).to_chunk_index()])
+                            },
+                            front: if z == (CHUNK_Z-1) as u8 {
+                                None
+                            } else {
+                                Some(entities[pos_in_chunk.to_neighbor(Direction::Front).to_chunk_index()])
+                            },
+                            back: if z == 0 {
+                                None
+                            } else {
+                                Some(entities[pos_in_chunk.to_neighbor(Direction::Back).to_chunk_index()])
+                            },
                         },
                         r#type: types[chunk_index],
                         faces: BlocFaces::default()
@@ -300,10 +326,10 @@ impl ChunkBlocs {
     pub fn set(&mut self, pos:&PosInChunk, val: Entity) {
         self.0[pos.to_chunk_index()] = val;
     }
-    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &Query<(&Pos,&Neighbors,&BlocType,&BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
+    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(&Pos,&Neighbors,&BlocType,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
         for bloc in self.0.iter() {
-            let (pos,neighbors,r#type,faces) = blocs.get(*bloc).expect("Cannot find bloc from chunk");
-            render_bloc(pos, neighbors, r#type, faces, asset_server, bloc_types_query, meshes, materials, cmds);
+            let (pos,neighbors,r#type,mut faces) = blocs.get_mut(*bloc).expect("Cannot find bloc from chunk");
+            render_bloc(pos, neighbors, r#type, &mut faces, asset_server, bloc_types_query, meshes, materials, cmds);
         }
         
         // let mut faces = Vec::new();
@@ -381,7 +407,7 @@ impl Chunk {
     pub fn get(&self, pos:&PosInChunk) -> Option<&Entity> {
         self.blocs.get(pos)
     }
-    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &Query<(&Pos,&Neighbors,&BlocType,&BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
+    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(&Pos,&Neighbors,&BlocType,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
         self.blocs.render(asset_server, blocs, bloc_types_query, meshes, materials, cmds);
     }
 }
@@ -421,7 +447,6 @@ impl Chunks {
                 }
             }
         }
-        dbg!(&types);
         let blocs = ChunkBlocs::new(pos, &types, cmds);
 
         let chunk = Chunk::new_with_blocs(pos, blocs);

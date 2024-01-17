@@ -2,9 +2,8 @@ use bevy::{prelude::*, window::ApplicationLifetime};
 
 pub mod bloc_and_chunk;
 use bloc_and_chunk::*;
-
-#[derive(Component)]
-struct CameraMarker;
+pub mod player;
+use player::*;
 
 #[derive(Event)]
 struct Render;
@@ -12,19 +11,20 @@ struct Render;
 fn setup(
     mut cmds: Commands,
     mut chunks: ResMut<Chunks>,
-    mut chunks_query: Query<(&ChunkPos, &ChunkBlocs)>,
+    chunks_query: Query<(&ChunkPos, &ChunkBlocs)>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>
 ) {
     // camera
     cmds.spawn((
-        Camera3dBundle {
-            transform: Transform::from_xyz(40.0, 48.0, 64.0)
-                .looking_at(Vec3::ZERO, Vec3::ZERO),
+        Player::new()
+        // Camera3dBundle {
+        //     transform: Transform::from_xyz(40.0, 48.0, 64.0)
+        //         .looking_at(Vec3::ZERO, Vec3::ZERO),
             
-            ..default()
-        },
-        CameraMarker,
+        //     ..default()
+        // },
+        // CameraMarker,
     ));
 
     // directional 'sun' light
@@ -77,15 +77,15 @@ fn setup(
     });
 }
 
-fn render(
+fn render_all(
     mut ev_app_lifetime: EventReader<ApplicationLifetime>,
-    mut chunks_query: Query<(&ChunkBlocs, &mut ChunkFaces, &ChunkPos)>,
+    mut chunks_query: Query<&ChunkBlocs>,
     mut cmds: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
     blocs_types_query: Query<&BlocType>,
-    blocs_query: Query<(&Pos, &Neighbors, &BlocType, &BlocFaces)>
+    mut blocs_query: Query<(&Pos, &Neighbors, &BlocType, &mut BlocFaces)>
 ) {
     let mut skip = true;
     for e in ev_app_lifetime.read() {
@@ -98,8 +98,8 @@ fn render(
         return
     }
     dbg!("render");
-    for (blocs, mut faces, pos) in chunks_query.iter_mut() {
-        blocs.render(&asset_server, &blocs_query, &blocs_types_query, &mut meshes, &mut materials, &mut cmds);
+    for blocs in chunks_query.iter_mut() {
+        blocs.render(&asset_server, &mut blocs_query, &blocs_types_query, &mut meshes, &mut materials, &mut cmds);
     }
 }
 
@@ -109,7 +109,7 @@ fn main() {
         //.add_plugins(bevy_inspector_egui::quick::WorldInspectorPlugin::new()) // for debug
         .add_plugins(bevy_editor_pls::EditorPlugin::default()) // for debug
         .add_systems(Startup, setup)
-        .add_systems(Update, render)
+        .add_systems(Update, render_all)
         .add_event::<Render>()
         .insert_resource(Chunks::new(0))
         .run();
