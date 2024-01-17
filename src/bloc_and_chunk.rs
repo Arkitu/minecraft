@@ -7,7 +7,7 @@ pub const CHUNK_Z: usize = 4; // Front
 
 pub const SQUARE_UNIT: f32 = 8.0;
 
-#[derive(Component, Clone, Copy, PartialEq)]
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub enum BlocType {
     Dirt,
     Grass,
@@ -41,15 +41,15 @@ pub struct Pos {
 
 #[derive(Component)]
 pub struct Neighbors {
-    up: Entity,
-    down: Entity,
-    right: Entity,
-    left: Entity,
-    front: Entity,
-    back: Entity
+    up: Option<Entity>,
+    down: Option<Entity>,
+    right: Option<Entity>,
+    left: Option<Entity>,
+    front: Option<Entity>,
+    back: Option<Entity>
 }
 impl Neighbors {
-    fn get_with_direction(&self, direction:&Direction) -> Entity {
+    fn get_with_direction(&self, direction:&Direction) -> Option<Entity> {
         match direction {
             Direction::Up => self.up,
             Direction::Down => self.down,
@@ -62,7 +62,7 @@ impl Neighbors {
 }
 
 #[derive(Component)]
-struct BlocFaces (Vec<Entity>);
+pub struct BlocFaces (Vec<Entity>);
 
 impl Default for BlocFaces {
     fn default() -> Self {
@@ -97,7 +97,10 @@ pub fn render_bloc(
 ) {
     let mut faces: Vec<Entity> = Vec::new();
     for direction in Direction::list() {
-        let neighbor = bloc_types_query.get(neighbors.get_with_direction(&direction)).unwrap();
+        let neighbor = match neighbors.get_with_direction(&direction) {
+            Some(n) => bloc_types_query.get(n).unwrap(),
+            None => &BlocType::Air
+        };
         if neighbor != &BlocType::Air {
             continue
         }
@@ -128,7 +131,7 @@ pub fn render_bloc(
 }
 
 /// Bloc position relative to the chunk corner
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Copy)]
 pub struct PosInChunk {
     pub x: u8,
     pub y: u8,
@@ -151,6 +154,9 @@ impl PosInChunk {
             z: z as u8
         }
     }
+    pub fn to_neighbor(&self, dir: Direction) -> Self {
+        dir.get_other_coordinates(self)
+    }
 }
 
 /// Chunk position in chunk unit
@@ -170,8 +176,8 @@ impl Into<Pos> for ChunkPos {
     }
 }
 
-#[derive(PartialEq)]
-enum Direction {
+#[derive(PartialEq, Clone, Copy)]
+pub enum Direction {
     Up, // +y
     Down, // -y
     Right, // +x
@@ -238,21 +244,22 @@ impl Direction {
 pub struct ChunkBlocs ([Entity; CHUNK_X*CHUNK_Y*CHUNK_Z]);
 
 impl ChunkBlocs {
-    pub fn new(inner: [Entity; CHUNK_X*CHUNK_Y*CHUNK_Z]) -> Self {
+    pub fn from_inner(inner: [Entity; CHUNK_X*CHUNK_Y*CHUNK_Z]) -> Self {
         Self(inner)
     }
-    pub fn new_empty(chunk_pos: ChunkPos, cmds: &mut Commands) -> Self {
-        let mut entities = arr![{
-            cmds.spawn_empty()
+    pub fn new(chunk_pos: ChunkPos, types: &[BlocType; CHUNK_X*CHUNK_Y*CHUNK_Z], cmds: &mut Commands) -> Self {
+        let entities = arr![{
+            cmds.spawn_empty().id()
         }; 128]; // CHUNK_X*CHUNK_Y*CHUNK_Z
-        for x in 0..CHUNK_X as u8 {
+        for x in 1..(CHUNK_X-1) as u8 {
             for y in 0..CHUNK_Y as u8 {
-                for z in 0..CHUNK_Z as u8 {
+                for z in 1..(CHUNK_Z-1) as u8 {
                     let pos_in_chunk = PosInChunk {
                         x,
                         y,
                         z
                     };
+                    let chunk_index = pos_in_chunk.to_chunk_index();
                     let mut pos: Pos = chunk_pos.into();
                     pos.x += x as i32;
                     pos.y += y as i32;
@@ -260,13 +267,32 @@ impl ChunkBlocs {
                     let bloc = Bloc {
                         pos,
                         neighbors: Neighbors {
-                            up: entities[pos_in_chunk.to_chunk_index()-]
-                        }
-                    }
+                            up: if y == (CHUNK_Z-1) as u8 {
+                                None
+                            } else {
+                                Some(entities[pos_in_chunk.to_neighbor(Direction::Up).to_chunk_index()])
+                            },
+                            down: if y == 0 {
+                                None
+                            } else {
+                                Some(entities[pos_in_chunk.to_neighbor(Direction::Down).to_chunk_index()])
+                            },
+                            right: Some(entities[pos_in_chunk.to_neighbor(Direction::Right).to_chunk_index()]),
+                            left: Some(entities[pos_in_chunk.to_neighbor(Direction::Left).to_chunk_index()]),
+                            front: Some(entities[pos_in_chunk.to_neighbor(Direction::Front).to_chunk_index()]),
+                            back: Some(entities[pos_in_chunk.to_neighbor(Direction::Back).to_chunk_index()])
+                        },
+                        r#type: types[chunk_index],
+                        faces: BlocFaces::default()
+                    };
+                    cmds.get_entity(entities[chunk_index]).unwrap().insert(bloc);
                 }
             }
         }
-        Self
+        Self(entities)
+    }
+    pub fn new_empty(chunk_pos: ChunkPos, cmds: &mut Commands) -> Self {
+        Self::new(chunk_pos, &[BlocType::Air; CHUNK_X*CHUNK_Y*CHUNK_Z], cmds)
     }
     pub fn get(&self, pos:&PosInChunk) -> Option<&Entity> {
         self.0.get(pos.to_chunk_index())
@@ -340,10 +366,10 @@ pub struct Chunk {
     pos: ChunkPos
 }
 impl Chunk {
-    pub fn new_empty(pos: ChunkPos) -> Self {
+    pub fn new_empty(pos: ChunkPos, cmds: &mut Commands) -> Self {
         Self {
             pos,
-            blocs: ChunkBlocs::new()
+            blocs: ChunkBlocs::new_empty(pos, cmds)
         }
     }
     pub fn new_with_blocs(pos: ChunkPos, blocs: ChunkBlocs) -> Self {
@@ -383,19 +409,22 @@ impl Chunks {
         if let Some(_) = self.get(pos) {
             return
         }
-        let mut blocs = ChunkBlocs::default();
+        let mut types = [BlocType::Air; CHUNK_X*CHUNK_Y*CHUNK_Z];
 
-        for x in 1..(CHUNK_X as u8)-1 {
-            for z in 1..(CHUNK_Z as u8)-1 {
+        for x in 0..CHUNK_X as u8 {
+            for z in 0..CHUNK_Z as u8 {
                 for y in 1..3 {
-                    blocs.set(&PosInChunk { x, y, z }, Some(cmds.spawn(BlocType::Stone).id()));
+                    types[PosInChunk { x, y, z }.to_chunk_index()] = BlocType::Stone;
                 }
                 for y in 3..4 {
-                    blocs.set(&PosInChunk { x, y, z }, Some(cmds.spawn(BlocType::Grass).id()));
+                    types[PosInChunk { x, y, z }.to_chunk_index()] = BlocType::Grass;
                 }
             }
         }
+        dbg!(&types);
+        let blocs = ChunkBlocs::new(pos, &types, cmds);
 
         let chunk = Chunk::new_with_blocs(pos, blocs);
+        self.insert(pos, cmds.spawn(chunk).id());
     }
 }

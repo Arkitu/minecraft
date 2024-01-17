@@ -12,6 +12,7 @@ struct Render;
 fn setup(
     mut cmds: Commands,
     mut chunks: ResMut<Chunks>,
+    mut chunks_query: Query<(&ChunkPos, &ChunkBlocs)>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>
 ) {
@@ -41,29 +42,31 @@ fn setup(
         ..default()
     });
 
-    let mut blocs = ChunkBlocs::new_empty(ChunkPos { x: 0, y: 0, z: 0 }, &mut cmds);
+    chunks.generate(ChunkPos { x: 0, y: 0, z: 0 }, &mut cmds, &chunks_query);
 
-    for x in 0..(CHUNK_X as u8)-1 {
-        for z in 0..(CHUNK_Z as u8)-1 {
-            for y in 1..3 {
-                blocs.set(&PosInChunk { x, y, z }, Some(cmds.spawn(BlocType::Stone).id()));
-            }
-            for y in 3..4 {
-                blocs.set(&PosInChunk { x, y, z }, Some(cmds.spawn(BlocType::Grass).id()));
-            }
-        }
-    }
+    //let mut blocs = ChunkBlocs::new_empty(ChunkPos { x: 0, y: 0, z: 0 }, &mut cmds);
 
-    let bloc = cmds.spawn(BlocType::Grass).id();
-    blocs.set(&PosInChunk { x: 1, y: 1, z: 1 }, Some(bloc));
+    // for x in 0..(CHUNK_X as u8)-1 {
+    //     for z in 0..(CHUNK_Z as u8)-1 {
+    //         for y in 1..3 {
+    //             blocs.set(&PosInChunk { x, y, z }, Some(cmds.spawn(BlocType::Stone).id()));
+    //         }
+    //         for y in 3..4 {
+    //             blocs.set(&PosInChunk { x, y, z }, Some(cmds.spawn(BlocType::Grass).id()));
+    //         }
+    //     }
+    // }
+
+    // let bloc = cmds.spawn(BlocType::Grass).id();
+    // blocs.set(&PosInChunk { x: 1, y: 1, z: 1 }, Some(bloc));
 
     // chunks
-    let base_chunk = Chunk::new_with_blocs(
-        ChunkPos { x: 0, y: 0, z: 0 },
-        blocs
-    );
-    let base_chunk_id = cmds.spawn(base_chunk).id();
-    chunks.insert(ChunkPos { x: 0, y: 0, z: 0 }, base_chunk_id);
+    // let base_chunk = Chunk::new_with_blocs(
+    //     ChunkPos { x: 0, y: 0, z: 0 },
+    //     blocs
+    // );
+    // let base_chunk_id = cmds.spawn(base_chunk).id();
+    // chunks.insert(ChunkPos { x: 0, y: 0, z: 0 }, base_chunk_id);
 
     // Spawn point at origin for debug
     cmds.spawn(PbrBundle {
@@ -72,7 +75,6 @@ fn setup(
         transform: Transform::from_xyz(1.0, 1.0, 1.0),
         ..default()
     });
-        
 }
 
 fn render(
@@ -82,7 +84,8 @@ fn render(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
-    blocs_query: Query<&BlocType>,
+    blocs_types_query: Query<&BlocType>,
+    blocs_query: Query<(&Pos, &Neighbors, &BlocType, &BlocFaces)>
 ) {
     let mut skip = true;
     for e in ev_app_lifetime.read() {
@@ -96,7 +99,7 @@ fn render(
     }
     dbg!("render");
     for (blocs, mut faces, pos) in chunks_query.iter_mut() {
-        *faces = blocs.render(pos, &asset_server, &blocs_query, &mut meshes, &mut materials, &mut cmds);
+        blocs.render(&asset_server, &blocs_query, &blocs_types_query, &mut meshes, &mut materials, &mut cmds);
     }
 }
 
