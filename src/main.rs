@@ -15,7 +15,7 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>
 ) {
-    // camera
+    // player
     cmds.spawn(Player::new());
 
     // directional 'sun' light
