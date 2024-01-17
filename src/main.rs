@@ -26,10 +26,7 @@ fn setup(
             color: Color::rgb(1.0, 1.0, 0.75),
             ..default()
         },
-        transform: Transform {
-            translation: Vec3::new(0.0, 2.0, 0.0),
-            ..default()
-        }.looking_to(Vec3 { x: 0.5, y: -0.5, z: 0.3 }, Vec3::ZERO),
+        transform: Transform::default().looking_to(Vec3 { x: 0.5, y: -0.5, z: 0.3 }, Vec3::ZERO),
         ..default()
     });
 

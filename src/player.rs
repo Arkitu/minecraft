@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use crate::bloc_and_chunk::SQUARE_UNIT;
 
 #[derive(Component)]
 pub struct PlayerMarker;
@@ -12,10 +13,8 @@ impl Player {
     pub fn new() -> Self {
         Self {
             cam: Camera3dBundle {
-                transform: Transform::from_xyz(40.0, 48.0, 64.0)
-                    .looking_at(Vec3::ZERO, Vec3::ZERO),
-                
-                ..default()
+                transform: Transform::from_xyz(0.0, 5.0, 0.0),
+                ..Default::default()
             },
             marker: PlayerMarker
         }

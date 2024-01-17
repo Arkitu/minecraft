@@ -5,7 +5,7 @@ pub const CHUNK_X: usize = 4; // Right
 pub const CHUNK_Y: usize = 8; // Up
 pub const CHUNK_Z: usize = 4; // Front
 
-pub const SQUARE_UNIT: f32 = 8.0;
+pub const SQUARE_UNIT: f32 = 1.0;
 
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub enum BlocType {
@@ -439,7 +439,7 @@ impl Chunks {
 
         for x in 0..CHUNK_X as u8 {
             for z in 0..CHUNK_Z as u8 {
-                for y in 1..3 {
+                for y in 0..3 {
                     types[PosInChunk { x, y, z }.to_chunk_index()] = BlocType::Stone;
                 }
                 for y in 3..4 {
