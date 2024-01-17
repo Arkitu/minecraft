@@ -1,4 +1,5 @@
 use bevy::{prelude::*, window::ApplicationLifetime};
+use bevy_rapier3d::prelude::*;
 
 pub mod bloc_and_chunk;
 use bloc_and_chunk::*;
@@ -31,30 +32,6 @@ fn setup(
     });
 
     chunks.generate(ChunkPos { x: 0, y: 0, z: 0 }, &mut cmds, &chunks_query);
-
-    //let mut blocs = ChunkBlocs::new_empty(ChunkPos { x: 0, y: 0, z: 0 }, &mut cmds);
-
-    // for x in 0..(CHUNK_X as u8)-1 {
-    //     for z in 0..(CHUNK_Z as u8)-1 {
-    //         for y in 1..3 {
-    //             blocs.set(&PosInChunk { x, y, z }, Some(cmds.spawn(BlocType::Stone).id()));
-    //         }
-    //         for y in 3..4 {
-    //             blocs.set(&PosInChunk { x, y, z }, Some(cmds.spawn(BlocType::Grass).id()));
-    //         }
-    //     }
-    // }
-
-    // let bloc = cmds.spawn(BlocType::Grass).id();
-    // blocs.set(&PosInChunk { x: 1, y: 1, z: 1 }, Some(bloc));
-
-    // chunks
-    // let base_chunk = Chunk::new_with_blocs(
-    //     ChunkPos { x: 0, y: 0, z: 0 },
-    //     blocs
-    // );
-    // let base_chunk_id = cmds.spawn(base_chunk).id();
-    // chunks.insert(ChunkPos { x: 0, y: 0, z: 0 }, base_chunk_id);
 
     // Spawn point at origin for debug
     cmds.spawn(PbrBundle {
@@ -94,8 +71,9 @@ fn render_all(
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
-        //.add_plugins(bevy_inspector_egui::quick::WorldInspectorPlugin::new()) // for debug
         .add_plugins(bevy_editor_pls::EditorPlugin::default()) // for debug
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugins(RapierDebugRenderPlugin::default())
         .add_systems(Startup, setup)
         .add_systems(Update, render_all)
         .add_event::<Render>()

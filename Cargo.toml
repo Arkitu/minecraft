@@ -7,9 +7,9 @@ edition = "2021"
 
 [dependencies]
 #bevy = { version = "0.12.0", features = ["dynamic_linking"] }
-bevy = "0.12.0"
-bevy-inspector-egui = "0.22.1"
+bevy = "0.12.1"
 bevy_editor_pls = "0.7.0"
+bevy_rapier3d = { version = "*", features = [ "simd-stable", "debug-render-3d", "parallel" ] }
 arr_macro = "0.2.1"
 
 # Enable a small amount of optimization in debug mode

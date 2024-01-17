@@ -1,4 +1,5 @@
 use bevy::{prelude::*, utils::HashMap};
+use bevy_rapier3d::prelude::*;
 use arr_macro::arr;
 
 pub const CHUNK_X: usize = 4; // Right
@@ -37,6 +38,11 @@ pub struct Pos {
     pub x: i32,
     pub y: i32,
     pub z: i32
+}
+impl Into<Transform> for Pos {
+    fn into(self) -> Transform {
+        Transform::from_xyz(self.x as f32, self.y as f32, self.z as f32)
+    }
 }
 
 #[derive(Component, Debug)]
@@ -78,7 +84,9 @@ pub struct Bloc {
     pos: Pos,
     neighbors: Neighbors,
     r#type: BlocType,
-    faces: BlocFaces
+    faces: BlocFaces,
+    collider: Collider,
+    transform: TransformBundle
 }
 
 impl Bloc {
@@ -275,7 +283,9 @@ impl ChunkBlocs {
                     pos.y += y as i32;
                     pos.z += z as i32;
                     let bloc = Bloc {
-                        pos,
+                        pos: pos.clone(),
+                        transform: TransformBundle::from_transform(pos.into()),
+                        collider: Collider::cuboid(SQUARE_UNIT/2.0, SQUARE_UNIT/2.0, SQUARE_UNIT/2.0),
                         neighbors: Neighbors {
                             up: if y == (CHUNK_Y-1) as u8 {
                                 None
@@ -331,55 +341,6 @@ impl ChunkBlocs {
             let (pos,neighbors,r#type,mut faces) = blocs.get_mut(*bloc).expect("Cannot find bloc from chunk");
             render_bloc(pos, neighbors, r#type, &mut faces, asset_server, bloc_types_query, meshes, materials, cmds);
         }
-        
-        // let mut faces = Vec::new();
-        // for (i, bloc) in self.0.iter().enumerate() {
-        //     if bloc.is_some() {
-        //         continue
-        //     }
-        //     let pos = PosInChunk::from_chunk_index(i);
-        //     if pos.x == CHUNK_X as u8 || pos.z == CHUNK_Z as u8 {
-        //         continue
-        //     }
-        //     for direction in Direction::list() {
-        //         if pos.x == 0 && direction == Direction::Left
-        //         || pos.x == CHUNK_X as u8 - 1 && direction == Direction::Right
-        //         || pos.y == 0 && direction == Direction::Down
-        //         || pos.y == CHUNK_Y as u8 - 1 && direction == Direction::Up
-        //         || pos.z == 0 && direction == Direction::Back
-        //         || pos.z == CHUNK_Z as u8 - 1 && direction == Direction::Front {
-        //             continue
-        //         }
-        //         if let Some(other_id) = self.get(&direction.get_other_coordinates(&pos)) {
-        //             let other_bloc = blocs.get(other_id).expect("Trying to render a deleted bloc");
-        //             // load the texture
-        //             let texture_handle = asset_server.load(&format!("{}/{}.png", other_bloc.to_string(), direction.face_to_render_name()));
-        //             // create a new quad mesh. this is what we will apply the texture to
-        //             let quad_handle = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(
-        //                 SQUARE_UNIT,
-        //                 SQUARE_UNIT
-        //             ))));
-        //             let material_handle = materials.add(StandardMaterial {
-        //                 base_color_texture: Some(texture_handle.clone()),
-        //                 ..default()
-        //             });
-        //             let (x, y, z) = direction.transform();
-        //             let id = cmds.spawn(PbrBundle {
-        //                 mesh: quad_handle.clone(),
-        //                 material: material_handle,
-        //                 transform: Transform::from_xyz(
-        //                     ((chunk_pos.x*CHUNK_X as i16) as f32 + pos.x as f32 + x) * SQUARE_UNIT,
-        //                     ((chunk_pos.y*CHUNK_Y as i16) as f32 + pos.y as f32 + y) * SQUARE_UNIT,
-        //                     ((chunk_pos.z*CHUNK_Z as i16) as f32 + pos.z as f32 + z) * SQUARE_UNIT
-        //                 ).looking_to(direction.looking_to(), Vec3::ZERO),
-        //                 ..default()
-        //             }).id();
-        //             faces.push(id);
-        //         }
-        //     }
-        // }
-
-        // return ChunkFaces(faces)
     }
 }
 
