@@ -17,7 +17,7 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>
 ) {
     // player
-    cmds.spawn(Player::new());
+    Player::spawn(&mut cmds);
 
     // directional 'sun' light
     cmds.spawn(DirectionalLightBundle {

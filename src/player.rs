@@ -7,19 +7,26 @@ pub struct PlayerMarker;
 
 #[derive(Bundle)]
 pub struct Player {
-    cam: Camera3dBundle,
     collider: Collider,
-    marker: PlayerMarker
+    marker: PlayerMarker,
+    spatial: SpatialBundle
 }
 impl Player {
     pub fn new() -> Self {
         Self {
-            cam: Camera3dBundle {
-                transform: Transform::from_xyz(0.0, 5.0, 0.0),
-                ..Default::default()
-            },
             collider: Collider::cuboid(SQUARE_UNIT/3.0, SQUARE_UNIT*0.9, SQUARE_UNIT/3.0),
-            marker: PlayerMarker
+            marker: PlayerMarker,
+            spatial: SpatialBundle::from_transform(Transform::from_xyz(0.0, 5.0, 0.0))
         }
+    }
+    pub fn spawn(cmds: &mut Commands) {
+        cmds.spawn(Self::new())
+            .with_children(|parent| {
+                parent.spawn(Camera3dBundle {
+                    
+                    transform: Transform::from_xyz(0.0, 0.5, 0.0),
+                    ..Default::default()
+                });
+            });
     }
 }

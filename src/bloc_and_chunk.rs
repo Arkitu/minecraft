@@ -85,6 +85,7 @@ pub struct Bloc {
     neighbors: Neighbors,
     r#type: BlocType,
     faces: BlocFaces,
+    rigid_body: RigidBody,
     collider: Collider,
     transform: TransformBundle
 }
@@ -285,6 +286,7 @@ impl ChunkBlocs {
                     let bloc = Bloc {
                         pos: pos.clone(),
                         transform: TransformBundle::from_transform(pos.into()),
+                        rigid_body: RigidBody::Fixed,
                         collider: Collider::cuboid(SQUARE_UNIT/2.0, SQUARE_UNIT/2.0, SQUARE_UNIT/2.0),
                         neighbors: Neighbors {
                             up: if y == (CHUNK_Y-1) as u8 {
@@ -321,7 +323,11 @@ impl ChunkBlocs {
                         r#type: types[chunk_index],
                         faces: BlocFaces::default()
                     };
-                    cmds.get_entity(entities[chunk_index]).unwrap().insert(bloc);
+                    let mut entity = cmds.get_entity(entities[chunk_index]).unwrap();
+                    entity.insert(bloc);
+                    if let BlocType::Air = types[chunk_index] {
+                        entity.insert(Sensor);
+                    }
                 }
             }
         }
