@@ -69,6 +69,7 @@ fn render_all(
 }
 
 fn main() {
+    web_sys::window().unwrap().frame_element().unwrap().unwrap().request_pointer_lock();
     App::new()
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_plugins(bevy_editor_pls::EditorPlugin::default()) // for debug
