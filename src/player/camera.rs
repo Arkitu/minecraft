@@ -25,26 +25,33 @@ impl Camera {
 #[derive(Component)]
 pub struct CameraConfig {
     sensi_x: f32,
-    sensi_y: f32
+    sensi_y: f32,
+    yaw: f32,
+    pitch: f32
 }
 impl Default for CameraConfig {
     fn default() -> Self {
-        CameraConfig { sensi_x: 0.01, sensi_y: 0.01 }
+        CameraConfig { sensi_x: 0.01, sensi_y: 0.01, yaw: 0.0, pitch: 0.0 }
     }
 }
 
 pub fn rotate_camera(
     mut motion_evr: EventReader<MouseMotion>,
-    mut cam: Query<(&mut Transform, &CameraConfig), With<CameraMarker>>
+    mut cam: Query<(&mut Transform, &mut CameraConfig), With<CameraMarker>>
 ) {
-    let (mut cam_pos, config) = cam.single_mut();
+    let (mut cam_pos, mut config) = cam.single_mut();
     for ev in motion_evr.read() {
         let mov = ev.delta;
-        cam_pos.rotate_y(-mov.x * config.sensi_x);
-        cam_pos.rotate_local_x(-mov.y * config.sensi_y);
+
+        config.yaw -= mov.x * config.sensi_x;
+        config.pitch -= mov.y * config.sensi_y;
+        config.pitch = config.pitch.clamp(-std::f32::consts::PI / 2.0, std::f32::consts::PI / 2.0);
+        
+        cam_pos.rotation = Quat::from_axis_angle(Vec3::Y, config.yaw) * Quat::from_axis_angle(Vec3::X, config.pitch);
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn cursor_grab(
     mut q_windows: Query<&mut Window, With<PrimaryWindow>>,
 ) {
@@ -56,4 +63,10 @@ pub fn cursor_grab(
 
     // also hide the cursor
     primary_window.cursor.visible = false;
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn cursor_grab_wasm() {
+    info!("coucou");
+    info!("{:?}", web_sys::window().unwrap().document().unwrap().body().unwrap().request_pointer_lock());
 }

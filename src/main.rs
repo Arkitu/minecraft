@@ -69,17 +69,22 @@ fn render_all(
 }
 
 fn main() {
-    web_sys::window().unwrap().frame_element().unwrap().unwrap().request_pointer_lock();
-    App::new()
-        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
+   let mut app = App::new();
+   app.add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_plugins(bevy_editor_pls::EditorPlugin::default()) // for debug
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugins(RapierDebugRenderPlugin::default())
         .add_systems(Startup, setup)
         .add_systems(Update, render_all)
         .add_systems(Update, rotate_camera)
-        .add_systems(Startup, cursor_grab)
         .add_event::<Render>()
-        .insert_resource(Chunks::new(0))
-        .run();
+        .insert_resource(Chunks::new(0));
+
+    #[cfg(target_arch = "wasm32")]
+    app.add_systems(Update, cursor_grab_wasm);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    app.add_systems(Startup, cursor_grab);
+
+    app.run();
 }

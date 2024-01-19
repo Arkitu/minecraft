@@ -11,7 +11,9 @@ bevy = "0.12.1"
 bevy_editor_pls = "0.7.0"
 bevy_rapier3d = { version = "*", features = [ "simd-stable", "debug-render-3d" ] }
 arr_macro = "0.2.1"
-web-sys = { version = "0.3.67", features = [ "Window", "Element" ] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3.67", features = [ "Window", "Element", "Document", "HtmlElement" ] }
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]
