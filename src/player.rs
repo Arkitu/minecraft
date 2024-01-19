@@ -2,6 +2,9 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use crate::bloc_and_chunk::SQUARE_UNIT;
 
+mod camera;
+pub use camera::{*, Camera};
+
 #[derive(Component)]
 pub struct PlayerMarker;
 
@@ -19,14 +22,13 @@ impl Player {
             spatial: SpatialBundle::from_transform(Transform::from_xyz(0.0, 5.0, 0.0))
         }
     }
-    pub fn spawn(cmds: &mut Commands) {
+    pub fn spawn(cmds: &mut Commands, meshes: &mut ResMut<Assets<Mesh>>,
+        materials: &mut ResMut<Assets<StandardMaterial>>) {
         cmds.spawn(Self::new())
             .with_children(|parent| {
-                parent.spawn(Camera3dBundle {
-                    
-                    transform: Transform::from_xyz(0.0, 0.5, 0.0),
-                    ..Default::default()
-                });
+                Camera::spawn(parent);
             });
     }
 }
+
+

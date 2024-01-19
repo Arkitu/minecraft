@@ -17,7 +17,7 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>
 ) {
     // player
-    Player::spawn(&mut cmds);
+    Player::spawn(&mut cmds, &mut meshes, &mut materials);
 
     // directional 'sun' light
     cmds.spawn(DirectionalLightBundle {
@@ -76,6 +76,8 @@ fn main() {
         .add_plugins(RapierDebugRenderPlugin::default())
         .add_systems(Startup, setup)
         .add_systems(Update, render_all)
+        .add_systems(Update, rotate_camera)
+        .add_systems(Startup, cursor_grab)
         .add_event::<Render>()
         .insert_resource(Chunks::new(0))
         .run();
