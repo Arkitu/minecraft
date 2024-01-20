@@ -17,7 +17,7 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>
 ) {
     // player
-    Player::spawn(&mut cmds, &mut meshes, &mut materials);
+    Player::spawn(&mut cmds);
 
     // directional 'sun' light
     cmds.spawn(DirectionalLightBundle {
@@ -81,7 +81,9 @@ fn main() {
         .insert_resource(Chunks::new(0));
 
     #[cfg(target_arch = "wasm32")]
-    app.add_systems(Update, cursor_grab_wasm);
+    app.add_systems(Update, cursor_grab_wasm)
+        .add_systems(Update, rotate_camera)
+        .insert_resource(WasmMouseTracker::new());
 
     #[cfg(not(target_arch = "wasm32"))]
     app.add_systems(Startup, cursor_grab);

@@ -14,6 +14,7 @@ arr_macro = "0.2.1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3.67", features = [ "Window", "Element", "Document", "HtmlElement" ] }
+gloo = "0.11.0"
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]

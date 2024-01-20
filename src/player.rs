@@ -22,8 +22,7 @@ impl Player {
             spatial: SpatialBundle::from_transform(Transform::from_xyz(0.0, 5.0, 0.0))
         }
     }
-    pub fn spawn(cmds: &mut Commands, meshes: &mut ResMut<Assets<Mesh>>,
-        materials: &mut ResMut<Assets<StandardMaterial>>) {
+    pub fn spawn(cmds: &mut Commands) {
         cmds.spawn(Self::new())
             .with_children(|parent| {
                 Camera::spawn(parent);
