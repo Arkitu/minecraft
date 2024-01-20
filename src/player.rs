@@ -41,6 +41,11 @@ pub struct Feet {
     transform: TransformBundle,
     sensor: Sensor
 }
+impl Feet {
+    pub fn spawn(parent: &mut ChildBuilder) {
+        parent.spawn(Self::default());
+    }
+}
 impl Default for Feet {
     fn default() -> Self {
         Self {
@@ -58,8 +63,7 @@ pub struct Player {
     marker: PlayerMarker,
     spatial: SpatialBundle,
     controller: KinematicCharacterController,
-    keys: PlayerKeys,
-    feet: Feet
+    keys: PlayerKeys
 }
 impl Player {
     pub fn new() -> Self {
@@ -68,14 +72,14 @@ impl Player {
             marker: PlayerMarker,
             spatial: SpatialBundle::from_transform(Transform::from_xyz(0.0, 4.5, 0.0)),
             controller: KinematicCharacterController::default(),
-            keys: PlayerKeys::default(),
-            feet: Feet::default()
+            keys: PlayerKeys::default()
         }
     }
     pub fn spawn(cmds: &mut Commands) {
         cmds.spawn(Self::new())
             .with_children(|parent| {
                 Camera::spawn(parent);
+                Feet::spawn(parent);
             });
     }
 }
