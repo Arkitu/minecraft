@@ -1,4 +1,5 @@
 use bevy::{prelude::*, input::mouse::MouseMotion, window::{PrimaryWindow, CursorGrabMode}};
+use crate::PlayerMarker;
 
 #[derive(Component)]
 pub struct CameraMarker;
@@ -35,23 +36,26 @@ impl Default for CameraConfig {
     }
 }
 
-pub fn rotate_camera_from_vec2(mov: Vec2, cam_pos: &mut Mut<Transform>, config: &mut Mut<CameraConfig>) {
+pub fn rotate_camera_from_vec2(mov: Vec2, player_pos: &mut Mut<Transform>, cam_pos: &mut Mut<Transform>, config: &mut Mut<CameraConfig>) {
     config.yaw -= mov.x * config.sensi_x;
     config.pitch -= mov.y * config.sensi_y;
     config.pitch = config.pitch.clamp(-std::f32::consts::PI / 2.0, std::f32::consts::PI / 2.0);
     
-    cam_pos.rotation = Quat::from_axis_angle(Vec3::Y, config.yaw) * Quat::from_axis_angle(Vec3::X, config.pitch);
+    player_pos.rotation = Quat::from_axis_angle(Vec3::Y, config.yaw); 
+    cam_pos.rotation = Quat::from_axis_angle(Vec3::X, config.pitch);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn rotate_camera(
     mut motion_evr: EventReader<MouseMotion>,
-    mut cam: Query<(&mut Transform, &mut CameraConfig), With<CameraMarker>>
+    mut cam: Query<(&mut CameraConfig, &mut Transform), (With<CameraMarker>, Without<PlayerMarker>)>,
+    mut player_pos: Query<&mut Transform, (With<PlayerMarker>, Without<CameraMarker>)>
 ) {
-    let (mut cam_pos, mut config) = cam.single_mut();
+    let (mut config, mut cam_pos) = cam.single_mut();
+    let mut player_pos = player_pos.single_mut();
     for ev in motion_evr.read() {
         let mov = ev.delta;
-        rotate_camera_from_vec2(mov, &mut cam_pos, &mut config);
+        rotate_camera_from_vec2(mov, &mut player_pos, &mut cam_pos, &mut config);
     }
 }
 
@@ -68,6 +72,25 @@ pub fn cursor_grab(
     // also hide the cursor
     primary_window.cursor.visible = false;
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn cursor_release(
+    mut q_windows: Query<&mut Window, With<PrimaryWindow>>,
+    keys: Res<Input<KeyCode>>
+) {
+    if !keys.just_pressed(KeyCode::Escape) {
+        return
+    }
+    let mut primary_window = q_windows.single_mut();
+
+    primary_window.cursor.grab_mode = CursorGrabMode::None;
+
+    primary_window.cursor.visible = true;
+}
+
+
+
+
 
 
 // Wasm support
@@ -120,18 +143,22 @@ impl WasmMouseTracker {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn cursor_grab_wasm() {
-    get_body().request_pointer_lock()
+pub fn cursor_grab() {
+    let body = get_body();
+    body.request_pointer_lock();
+    body.request_fullscreen();
 }
 
 #[cfg(target_arch = "wasm32")]
 pub fn rotate_camera(
     wasm_mouse_tracker: Res<WasmMouseTracker>,
-    mut cam: Query<(&mut Transform, &mut CameraConfig), With<CameraMarker>>
+    mut cam: Query<(&mut CameraConfig, &mut Transform), (With<CameraMarker>, Without<PlayerMarker>)>,
+    mut player_pos: Query<&mut Transform, (With<PlayerMarker>, Without<CameraMarker>)>
 ) {
-    let (mut cam_pos, mut config) = cam.single_mut();
+    let (mut config, mut cam_pos) = cam.single_mut();
+    let mut player_pos = player_pos.single_mut();
     let mov = wasm_mouse_tracker.get_delta_and_reset();
     if mov != Vec2::ZERO {
-        rotate_camera_from_vec2(mov, &mut cam_pos, &mut config)
+        rotate_camera_from_vec2(mov, &mut player_pos, &mut cam_pos, &mut config)
     }
 }

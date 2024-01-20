@@ -77,16 +77,18 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(Update, render_all)
         .add_systems(Update, rotate_camera)
+        .add_systems(Update, move_player)
         .add_event::<Render>()
         .insert_resource(Chunks::new(0));
 
     #[cfg(target_arch = "wasm32")]
-    app.add_systems(Update, cursor_grab_wasm)
-        .add_systems(Update, rotate_camera)
+    app.add_systems(Update, cursor_grab)
+        //.add_systems(Update, rotate_camera)
         .insert_resource(WasmMouseTracker::new());
 
     #[cfg(not(target_arch = "wasm32"))]
-    app.add_systems(Startup, cursor_grab);
+    app.add_systems(Startup, cursor_grab)
+        .add_systems(Update, cursor_release);
 
     app.run();
 }
