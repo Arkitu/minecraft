@@ -5,6 +5,8 @@ mod camera;
 pub use camera::{*, Camera};
 
 const SPEED: f32 = 0.3;
+const PLAYER_HITBOX_RADIUS: f32 = 0.33;
+const PLAYER_HITBOX_HEIGHT: f32 = 1.8;
 
 #[derive(Component)]
 pub struct PlayerMarker;
@@ -29,22 +31,45 @@ impl Default for PlayerKeys {
     }
 }
 
+#[derive(Component)]
+pub struct FeetMarker;
+
+#[derive(Bundle)]
+pub struct Feet {
+    marker: FeetMarker,
+    collider: Collider,
+    transform: TransformBundle,
+    sensor: Sensor
+}
+impl Default for Feet {
+    fn default() -> Self {
+        Self {
+            marker: FeetMarker,
+            collider: Collider::cylinder(0.1, PLAYER_HITBOX_RADIUS),
+            sensor: Sensor,
+            transform: TransformBundle::from_transform(Transform::from_xyz(0.0, -PLAYER_HITBOX_HEIGHT/2.0, 0.0))
+        }
+    }
+}
+
 #[derive(Bundle)]
 pub struct Player {
     collider: Collider,
     marker: PlayerMarker,
     spatial: SpatialBundle,
     controller: KinematicCharacterController,
-    keys: PlayerKeys
+    keys: PlayerKeys,
+    feet: Feet
 }
 impl Player {
     pub fn new() -> Self {
         Self {
-            collider: Collider::cylinder(0.9, 1.0/3.0),
+            collider: Collider::cylinder(PLAYER_HITBOX_HEIGHT/2.0, PLAYER_HITBOX_RADIUS),
             marker: PlayerMarker,
             spatial: SpatialBundle::from_transform(Transform::from_xyz(0.0, 4.5, 0.0)),
             controller: KinematicCharacterController::default(),
-            keys: PlayerKeys::default()
+            keys: PlayerKeys::default(),
+            feet: Feet::default()
         }
     }
     pub fn spawn(cmds: &mut Commands) {
@@ -63,11 +88,14 @@ pub fn move_player(
     let mut mov = Vec3::ZERO;
     if keys.pressed(player_keys.forward) {
         mov -= pos.local_z()
-    } else if keys.pressed(player_keys.backward) {
+    }
+    if keys.pressed(player_keys.backward) {
         mov += pos.local_z()
-    } else if keys.pressed(player_keys.right) {
+    }
+    if keys.pressed(player_keys.right) {
         mov += pos.local_x()
-    } else if keys.pressed(player_keys.left) {
+    }
+    if keys.pressed(player_keys.left) {
         mov -= pos.local_x()
     }
     mov = mov.normalize_or_zero() * SPEED;
