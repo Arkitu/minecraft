@@ -1,6 +1,21 @@
 use bevy::{prelude::*, input::mouse::MouseMotion, window::{PrimaryWindow, CursorGrabMode}};
 use crate::PlayerMarker;
 
+pub struct CameraPlugin;
+impl Plugin for CameraPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, rotate_camera);
+
+        #[cfg(target_arch = "wasm32")]
+        app.add_systems(Update, cursor_grab)
+            .insert_resource(WasmMouseTracker::new());
+
+        #[cfg(not(target_arch = "wasm32"))]
+        app.add_systems(Startup, cursor_grab)
+            .add_systems(Update, cursor_release);
+    }
+}
+
 #[derive(Component)]
 pub struct CameraMarker;
 
@@ -10,16 +25,16 @@ pub struct Camera {
     cam: Camera3dBundle,
     config: CameraConfig
 }
-impl Camera {
-    pub fn spawn(parent: &mut ChildBuilder) {
-        parent.spawn(Self {
+impl Default for Camera {
+    fn default() -> Self {
+        Self {
             marker: CameraMarker,
             cam: Camera3dBundle {
                 transform: Transform::from_xyz(0.0, 0.5, 0.0),
                 ..Default::default()
             },
             config: CameraConfig::default()
-        });
+        }
     }
 }
 

@@ -8,6 +8,14 @@ const SPEED: f32 = 0.3;
 const PLAYER_HITBOX_RADIUS: f32 = 0.33;
 const PLAYER_HITBOX_HEIGHT: f32 = 1.8;
 
+pub struct PlayerPlugin;
+impl Plugin for PlayerPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugins(CameraPlugin)
+            .add_systems(Update, move_player);
+    }
+}
+
 #[derive(Component)]
 pub struct PlayerMarker;
 
@@ -41,11 +49,6 @@ pub struct Feet {
     transform: TransformBundle,
     sensor: Sensor
 }
-impl Feet {
-    pub fn spawn(parent: &mut ChildBuilder) {
-        parent.spawn(Self::default());
-    }
-}
 impl Default for Feet {
     fn default() -> Self {
         Self {
@@ -78,8 +81,8 @@ impl Player {
     pub fn spawn(cmds: &mut Commands) {
         cmds.spawn(Self::new())
             .with_children(|parent| {
-                Camera::spawn(parent);
-                Feet::spawn(parent);
+                parent.spawn(Camera::default());
+                parent.spawn(Feet::default());
             });
     }
 }
