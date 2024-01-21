@@ -86,14 +86,7 @@ pub struct Bloc {
     r#type: BlocType,
     faces: BlocFaces,
     rigid_body: RigidBody,
-    collider: Collider,
     transform: TransformBundle
-}
-
-impl Bloc {
-    fn render(&mut self, asset_server: &Res<AssetServer>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
-        render_bloc(&self.pos, &self.neighbors, &self.r#type, &mut self.faces, asset_server, bloc_types_query, meshes, materials, cmds)
-    }
 }
 
 pub fn render_bloc(
@@ -287,7 +280,6 @@ impl ChunkBlocs {
                         pos: pos.clone(),
                         transform: TransformBundle::from_transform(pos.into()),
                         rigid_body: RigidBody::Fixed,
-                        collider: Collider::cuboid(SQUARE_UNIT/2.0, SQUARE_UNIT/2.0, SQUARE_UNIT/2.0),
                         neighbors: Neighbors {
                             up: if y == (CHUNK_Y-1) as u8 {
                                 None
@@ -325,8 +317,8 @@ impl ChunkBlocs {
                     };
                     let mut entity = cmds.get_entity(entities[chunk_index]).unwrap();
                     entity.insert(bloc);
-                    if let BlocType::Air = types[chunk_index] {
-                        entity.insert(Sensor);
+                    if types[chunk_index] != BlocType::Air {
+                        entity.insert(Collider::cuboid(SQUARE_UNIT/2.0, SQUARE_UNIT/2.0, SQUARE_UNIT/2.0));
                     }
                 }
             }
