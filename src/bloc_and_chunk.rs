@@ -406,6 +406,7 @@ impl Chunks {
                 }
             }
         }
+        types[PosInChunk { x:1, y:4, z:1 }.to_chunk_index()] = BlocType::Stone;
         let blocs = ChunkBlocs::new(pos, &types, cmds);
 
         let chunk = Chunk::new_with_blocs(pos, blocs);

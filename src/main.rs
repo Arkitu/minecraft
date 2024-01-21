@@ -31,7 +31,11 @@ fn setup(
         ..default()
     });
 
-    chunks.generate(ChunkPos { x: 0, y: 0, z: 0 }, &mut cmds, &chunks_query);
+    for x in -1..=1 {
+        for z in -1..=1 {
+            chunks.generate(ChunkPos { x, y: 0, z }, &mut cmds, &chunks_query);
+        }
+    }
 
     // Spawn point at origin for debug
     cmds.spawn(PbrBundle {
