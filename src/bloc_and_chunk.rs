@@ -86,7 +86,8 @@ pub struct Bloc {
     r#type: BlocType,
     faces: BlocFaces,
     rigid_body: RigidBody,
-    transform: TransformBundle
+    transform: TransformBundle,
+    collision_groups: CollisionGroups
 }
 
 pub fn render_bloc(
@@ -313,7 +314,8 @@ impl ChunkBlocs {
                             },
                         },
                         r#type: types[chunk_index],
-                        faces: BlocFaces::default()
+                        faces: BlocFaces::default(),
+                        collision_groups: CollisionGroups::new(0b1000.into(), u32::)
                     };
                     let mut entity = cmds.get_entity(entities[chunk_index]).unwrap();
                     entity.insert(bloc);

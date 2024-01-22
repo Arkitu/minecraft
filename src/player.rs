@@ -42,7 +42,11 @@ impl Default for PlayerKeys {
 }
 
 #[derive(Component)]
+pub struct FeetMarker;
+
+#[derive(Component)]
 pub struct Feet {
+    marker: FeetMarker,
     collider: Collider,
     sensor: Sensor,
     transform: TransformBundle
@@ -50,6 +54,7 @@ pub struct Feet {
 impl Default for Feet {
     fn default() -> Self {
         Self {
+            marker: FeetMarker,
             collider: Collider::cylinder(0.1, PLAYER_HITBOX_RADIUS-0.01),
             sensor: Sensor,
             transform: TransformBundle::from_transform(Transform::from_xyz(0.0, -PLAYER_HITBOX_HEIGHT/2.0, 0.0))
@@ -102,10 +107,12 @@ impl Player {
 }
 
 pub fn move_player(
-    mut player: Query<(&mut ExternalForce, &mut ExternalImpulse, &Transform, &PlayerKeys), With<PlayerMarker>>,
+    mut player: Query<(&mut ExternalForce, &mut ExternalImpulse, &Transform, &PlayerKeys, Entity), With<PlayerMarker>>,
+    rapier_ctx: Res<RapierContext>,
+    feet: Query<Entity, With<FeetMarker>>,
     keys: Res<Input<KeyCode>>
 ) {
-    let (mut input_force, mut jump_impulse, pos, player_keys) = player.single_mut();
+    let (mut input_force, mut jump_impulse, pos, player_keys, player) = player.single_mut();
     let mut mov = Vec3::ZERO;
     if keys.pressed(player_keys.forward) || keys.just_pressed(player_keys.forward) {
         mov -= pos.local_z()
@@ -123,6 +130,23 @@ pub fn move_player(
     mov = mov.normalize_or_zero() * SPEED;
 
     input_force.force = mov;
+
+    let feet = feet.single();
+
+    for (e1, e2, is_intersecting) in rapier_ctx.intersections_with(feet) {
+        if !is_intersecting {
+            continue
+        }
+        let other = if e1 == feet {
+            e2
+        } else {
+            e1
+        };
+        
+    }
+    for pair in rapier_ctx.contacts_with(entity) {
+        pair
+    }
 
     if keys.just_pressed(player_keys.jump) {
         jump_impulse.impulse = Vec3::new(0.0, 0.15, 0.0);
