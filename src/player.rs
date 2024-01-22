@@ -44,12 +44,13 @@ impl Default for PlayerKeys {
 #[derive(Component)]
 pub struct FeetMarker;
 
-#[derive(Component)]
+#[derive(Bundle)]
 pub struct Feet {
     marker: FeetMarker,
     collider: Collider,
     sensor: Sensor,
-    transform: TransformBundle
+    transform: TransformBundle,
+    collision_groups: CollisionGroups
 }
 impl Default for Feet {
     fn default() -> Self {
@@ -57,7 +58,8 @@ impl Default for Feet {
             marker: FeetMarker,
             collider: Collider::cylinder(0.1, PLAYER_HITBOX_RADIUS-0.01),
             sensor: Sensor,
-            transform: TransformBundle::from_transform(Transform::from_xyz(0.0, -PLAYER_HITBOX_HEIGHT/2.0, 0.0))
+            transform: TransformBundle::from_transform(Transform::from_xyz(0.0, -(PLAYER_HITBOX_HEIGHT/2.0)-0.01, 0.0)),
+            collision_groups: CollisionGroups::new(Group::GROUP_3, Group::GROUP_1)
         }
     }
 }
@@ -133,6 +135,7 @@ pub fn move_player(
 
     let feet = feet.single();
 
+    let mut is_on_ground = false;
     for (e1, e2, is_intersecting) in rapier_ctx.intersections_with(feet) {
         if !is_intersecting {
             continue
@@ -142,13 +145,15 @@ pub fn move_player(
         } else {
             e1
         };
-        
-    }
-    for pair in rapier_ctx.contacts_with(entity) {
-        pair
+        if let Some(pair) = rapier_ctx.contact_pair(player, other) {
+            if pair.has_any_active_contacts() {
+                is_on_ground = true;
+                break;
+            }
+        }
     }
 
-    if keys.just_pressed(player_keys.jump) {
+    if keys.just_pressed(player_keys.jump) && is_on_ground {
         jump_impulse.impulse = Vec3::new(0.0, 0.15, 0.0);
     } else {
         jump_impulse.impulse = Vec3::ZERO;

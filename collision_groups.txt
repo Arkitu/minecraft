@@ -1,0 +1,4 @@
+This is the list of the collision groups :
+1 -> blocs
+2 -> player
+3 -> player's feet

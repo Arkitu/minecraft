@@ -315,7 +315,7 @@ impl ChunkBlocs {
                         },
                         r#type: types[chunk_index],
                         faces: BlocFaces::default(),
-                        collision_groups: CollisionGroups::new(0b1000.into(), u32::)
+                        collision_groups: CollisionGroups::new(Group::GROUP_1, Group::ALL)
                     };
                     let mut entity = cmds.get_entity(entities[chunk_index]).unwrap();
                     entity.insert(bloc);
