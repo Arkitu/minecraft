@@ -12,7 +12,7 @@ const PLAYER_HITBOX_HEIGHT: f32 = 1.8;
 pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(CameraPlugin)
+        app.add_plugins(HeadPlugin)
             .add_systems(Update, move_player);
     }
 }

@@ -45,14 +45,14 @@ impl Into<Transform> for Pos {
     }
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Clone)]
 pub struct Neighbors {
-    up: Option<Entity>,
-    down: Option<Entity>,
-    right: Option<Entity>,
-    left: Option<Entity>,
-    front: Option<Entity>,
-    back: Option<Entity>
+    pub up: Option<Entity>,
+    pub down: Option<Entity>,
+    pub right: Option<Entity>,
+    pub left: Option<Entity>,
+    pub front: Option<Entity>,
+    pub back: Option<Entity>
 }
 impl Neighbors {
     fn get_with_direction(&self, direction:&Direction) -> Option<Entity> {
@@ -64,6 +64,16 @@ impl Neighbors {
             Direction::Front => self.front,
             Direction::Back => self.back
         }
+    }
+    fn list(&self) -> [&Option<Entity>; 6] {
+        [
+            &self.up,
+            &self.down,
+            &self.right,
+            &self.left,
+            &self.front,
+            &self.back
+        ]
     }
 }
 
@@ -79,6 +89,9 @@ impl Default for BlocFaces {
     }
 }
 
+#[derive(Component)]
+pub struct FaceMarker;
+
 #[derive(Bundle)]
 pub struct Bloc {
     pos: Pos,
@@ -91,7 +104,7 @@ pub struct Bloc {
 }
 
 pub fn render_bloc(
-    pos: &Pos,
+    bloc_entity: Entity,
     neighbors: &Neighbors,
     r#type: &BlocType,
     old_faces: &mut BlocFaces,
@@ -125,21 +138,22 @@ pub fn render_bloc(
             ..default()
         });
         let (x, y, z) = direction.transform();
-        let id = cmds.spawn(PbrBundle {
+        let id = cmds.spawn((PbrBundle {
             mesh: quad_handle.clone(),
             material: material_handle,
             transform: Transform::from_xyz(
-                (pos.x as f32 + x) * SQUARE_UNIT,
-                (pos.y as f32 + y) * SQUARE_UNIT,
-                (pos.z as f32 + z) * SQUARE_UNIT
+                x * SQUARE_UNIT,
+                y * SQUARE_UNIT,
+                z * SQUARE_UNIT
             ).looking_to(direction.looking_to(), Vec3::ZERO),
             ..default()
-        }).id();
+        }, FaceMarker)).id();
         faces.push(id);
     }
     for f in old_faces.0.iter() {
         cmds.entity(*f).despawn()
     }
+    cmds.entity(bloc_entity).push_children(&faces);
     *old_faces = BlocFaces(faces);
 }
 
@@ -336,10 +350,10 @@ impl ChunkBlocs {
     pub fn set(&mut self, pos:&PosInChunk, val: Entity) {
         self.0[pos.to_chunk_index()] = val;
     }
-    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(&Pos,&Neighbors,&BlocType,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
+    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(Entity,&Neighbors,&BlocType,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
         for bloc in self.0.iter() {
-            let (pos,neighbors,r#type,mut faces) = blocs.get_mut(*bloc).expect("Cannot find bloc from chunk");
-            render_bloc(pos, neighbors, r#type, &mut faces, asset_server, bloc_types_query, meshes, materials, cmds);
+            let (bloc_entity, neighbors,r#type,mut faces) = blocs.get_mut(*bloc).expect("Cannot find bloc from chunk");
+            render_bloc(bloc_entity,  neighbors, r#type, &mut faces, asset_server, bloc_types_query, meshes, materials, cmds);
         }
     }
 }
@@ -368,7 +382,7 @@ impl Chunk {
     pub fn get(&self, pos:&PosInChunk) -> Option<&Entity> {
         self.blocs.get(pos)
     }
-    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(&Pos,&Neighbors,&BlocType,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
+    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(Entity,&Neighbors,&BlocType,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
         self.blocs.render(asset_server, blocs, bloc_types_query, meshes, materials, cmds);
     }
 }
