@@ -5,6 +5,7 @@ mod camera;
 pub use camera::{*, Camera};
 
 const SPEED: f32 = 0.4;
+const JUMP_SPEED: f32 = 0.15;
 const PLAYER_HITBOX_RADIUS: f32 = 0.33;
 const PLAYER_HITBOX_HEIGHT: f32 = 1.8;
 
@@ -13,8 +14,6 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(CameraPlugin)
             .add_systems(Update, move_player);
-            // .add_systems(Update, gravity)
-            // .add_systems(Update, log);
     }
 }
 
@@ -42,27 +41,7 @@ impl Default for PlayerKeys {
 }
 
 #[derive(Component)]
-pub struct FeetMarker;
-
-#[derive(Bundle)]
-pub struct Feet {
-    marker: FeetMarker,
-    collider: Collider,
-    sensor: Sensor,
-    transform: TransformBundle,
-    collision_groups: CollisionGroups
-}
-impl Default for Feet {
-    fn default() -> Self {
-        Self {
-            marker: FeetMarker,
-            collider: Collider::cylinder(0.1, PLAYER_HITBOX_RADIUS-0.01),
-            sensor: Sensor,
-            transform: TransformBundle::from_transform(Transform::from_xyz(0.0, -(PLAYER_HITBOX_HEIGHT/2.0)-0.01, 0.0)),
-            collision_groups: CollisionGroups::new(Group::GROUP_3, Group::GROUP_1)
-        }
-    }
-}
+pub struct TouchedGroudLastFrame(bool);
 
 #[derive(Bundle)]
 pub struct Player {
@@ -77,12 +56,14 @@ pub struct Player {
     jump_impulse: ExternalImpulse,
     sleeping: Sleeping,
     locked_axes: LockedAxes,
-    keys: PlayerKeys
+    keys: PlayerKeys,
+    collision_groups: CollisionGroups,
+    touched_groud_last_frame: TouchedGroudLastFrame
 }
 impl Player {
     pub fn new() -> Self {
         Self {
-            collider: Collider::capsule_y(PLAYER_HITBOX_HEIGHT/2.0, PLAYER_HITBOX_RADIUS), // ::cylinder(PLAYER_HITBOX_HEIGHT/2.0, PLAYER_HITBOX_RADIUS),
+            collider: Collider::cylinder(PLAYER_HITBOX_HEIGHT/2.0, PLAYER_HITBOX_RADIUS), // ::cylinder(PLAYER_HITBOX_HEIGHT/2.0, PLAYER_HITBOX_RADIUS),
             collider_mass_properties: ColliderMassProperties::Density(0.01),
             damping: Damping {
                 linear_damping: 3.0,
@@ -97,24 +78,24 @@ impl Player {
             sleeping: Sleeping::disabled(),
             locked_axes: LockedAxes::ROTATION_LOCKED,
             keys: PlayerKeys::default(),
+            collision_groups: CollisionGroups::new(Group::GROUP_2, Group::ALL),
+            touched_groud_last_frame: TouchedGroudLastFrame(false)
         }
     }
     pub fn spawn(cmds: &mut Commands) {
         cmds.spawn(Self::new())
             .with_children(|parent| {
                 parent.spawn(Camera::default());
-                parent.spawn(Feet::default());
             });
     }
 }
 
 pub fn move_player(
-    mut player: Query<(&mut ExternalForce, &mut ExternalImpulse, &Transform, &PlayerKeys, Entity), With<PlayerMarker>>,
+    mut player: Query<(&mut ExternalForce, &mut ExternalImpulse, &Transform, &PlayerKeys, &mut TouchedGroudLastFrame, Entity), With<PlayerMarker>>,
     rapier_ctx: Res<RapierContext>,
-    feet: Query<Entity, With<FeetMarker>>,
     keys: Res<Input<KeyCode>>
 ) {
-    let (mut input_force, mut jump_impulse, pos, player_keys, player) = player.single_mut();
+    let (mut input_force, mut jump_impulse, pos, player_keys, mut touched_groud_last_frame, player) = player.single_mut();
     let mut mov = Vec3::ZERO;
     if keys.pressed(player_keys.forward) || keys.just_pressed(player_keys.forward) {
         mov -= pos.local_z()
@@ -133,58 +114,28 @@ pub fn move_player(
 
     input_force.force = mov;
 
-    let feet = feet.single();
+    let ground = dbg!(rapier_ctx.intersection_with_shape(
+        pos.translation + Vec3::new(0.0, -PLAYER_HITBOX_HEIGHT/2.0, 0.0),
+        Quat::IDENTITY,
+        &Collider::cylinder(0.01, PLAYER_HITBOX_RADIUS-0.01),
+        QueryFilter::default().groups(
+            CollisionGroups::new(Group::GROUP_2, Group::GROUP_1)
+        )
+    ));
 
-    let mut is_on_ground = false;
-    for (e1, e2, is_intersecting) in rapier_ctx.intersections_with(feet) {
-        if !is_intersecting {
-            continue
+    let is_on_ground = match ground {
+        None => false,
+        Some(ground) => match rapier_ctx.contact_pair(ground, player) {
+            None => false,
+            Some(pair) => pair.has_any_active_contacts()
         }
-        let other = if e1 == feet {
-            e2
-        } else {
-            e1
-        };
-        if let Some(pair) = rapier_ctx.contact_pair(player, other) {
-            if pair.has_any_active_contacts() {
-                is_on_ground = true;
-                break;
-            }
-        }
-    }
+    };
 
-    if keys.just_pressed(player_keys.jump) && is_on_ground {
-        jump_impulse.impulse = Vec3::new(0.0, 0.15, 0.0);
+    if keys.pressed(player_keys.jump) && is_on_ground && touched_groud_last_frame.0 {
+        jump_impulse.impulse = Vec3::new(0.0, JUMP_SPEED, 0.0);
     } else {
         jump_impulse.impulse = Vec3::ZERO;
     }
 
-    // if let Ok(output) = output.get_single() {
-    //     if keys.pressed(player_keys.jump) && output.grounded {
-    //     }
-    // }
+    touched_groud_last_frame.0 = is_on_ground;
 }
-
-// pub fn gravity(
-//     mut player_controller: Query<&mut KinematicCharacterController, With<PlayerMarker>>
-// ) {
-//     let mut player_controller = player_controller.single_mut();
-//     match player_controller.translation {
-//         Some(ref mut t) => {
-//             t.y -= 0.2;
-//         },
-//         None => {
-//             player_controller.translation = Some(Vec3::new(0.0, -0.2, 0.0));
-//         }
-//     }
-// }
-
-// pub fn log(
-//     output: Query<&KinematicCharacterControllerOutput, With<PlayerMarker>>
-// ) {
-//     let output = match output.get_single() {
-//         Ok(o) => o,
-//         Err(_) => return
-//     };
-//     dbg!(output.desired_translation, output.effective_translation, output.grounded);
-// }
