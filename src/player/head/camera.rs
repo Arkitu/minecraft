@@ -1,5 +1,5 @@
 use bevy::{prelude::*, input::mouse::MouseMotion, window::{PrimaryWindow, CursorGrabMode}};
-use crate::PlayerMarker;
+use crate::{PlayerMarker, HeadMarker};
 
 pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
@@ -13,28 +13,6 @@ impl Plugin for CameraPlugin {
         #[cfg(not(target_arch = "wasm32"))]
         app.add_systems(Startup, cursor_grab)
             .add_systems(Update, cursor_release);
-    }
-}
-
-#[derive(Component)]
-pub struct CameraMarker;
-
-#[derive(Bundle)]
-pub struct Camera {
-    marker: CameraMarker,
-    cam: Camera3dBundle,
-    config: CameraConfig
-}
-impl Default for Camera {
-    fn default() -> Self {
-        Self {
-            marker: CameraMarker,
-            cam: Camera3dBundle {
-                transform: Transform::from_xyz(0.0, 0.5, 0.0),
-                ..Default::default()
-            },
-            config: CameraConfig::default()
-        }
     }
 }
 
@@ -63,8 +41,8 @@ pub fn rotate_camera_from_vec2(mov: Vec2, player_pos: &mut Mut<Transform>, cam_p
 #[cfg(not(target_arch = "wasm32"))]
 pub fn rotate_camera(
     mut motion_evr: EventReader<MouseMotion>,
-    mut cam: Query<(&mut CameraConfig, &mut Transform), (With<CameraMarker>, Without<PlayerMarker>)>,
-    mut player_pos: Query<&mut Transform, (With<PlayerMarker>, Without<CameraMarker>)>
+    mut cam: Query<(&mut CameraConfig, &mut Transform), (With<HeadMarker>, Without<PlayerMarker>)>,
+    mut player_pos: Query<&mut Transform, (With<PlayerMarker>, Without<HeadMarker>)>
 ) {
     let (mut config, mut cam_pos) = cam.single_mut();
     let mut player_pos = player_pos.single_mut();

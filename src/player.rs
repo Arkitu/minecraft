@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
-mod camera;
-pub use camera::{*, Camera};
+mod head;
+pub use head::{*, Head};
 
 const SPEED: f32 = 0.4;
 const JUMP_SPEED: f32 = 0.15;
@@ -85,7 +85,7 @@ impl Player {
     pub fn spawn(cmds: &mut Commands) {
         cmds.spawn(Self::new())
             .with_children(|parent| {
-                parent.spawn(Camera::default());
+                parent.spawn(Head::default());
             });
     }
 }
@@ -114,14 +114,14 @@ pub fn move_player(
 
     input_force.force = mov;
 
-    let ground = dbg!(rapier_ctx.intersection_with_shape(
+    let ground = rapier_ctx.intersection_with_shape(
         pos.translation + Vec3::new(0.0, -PLAYER_HITBOX_HEIGHT/2.0, 0.0),
         Quat::IDENTITY,
         &Collider::cylinder(0.01, PLAYER_HITBOX_RADIUS-0.01),
         QueryFilter::default().groups(
             CollisionGroups::new(Group::GROUP_2, Group::GROUP_1)
         )
-    ));
+    );
 
     let is_on_ground = match ground {
         None => false,
