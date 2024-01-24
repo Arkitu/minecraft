@@ -145,8 +145,8 @@ pub fn cursor_grab() {
 #[cfg(target_arch = "wasm32")]
 pub fn rotate_camera(
     wasm_mouse_tracker: Res<WasmMouseTracker>,
-    mut cam: Query<(&mut CameraConfig, &mut Transform), (With<CameraMarker>, Without<PlayerMarker>)>,
-    mut player_pos: Query<&mut Transform, (With<PlayerMarker>, Without<CameraMarker>)>
+    mut cam: Query<(&mut CameraConfig, &mut Transform), (With<HeadMarker>, Without<PlayerMarker>)>,
+    mut player_pos: Query<&mut Transform, (With<PlayerMarker>, Without<HeadMarker>)>
 ) {
     let (mut config, mut cam_pos) = cam.single_mut();
     let mut player_pos = player_pos.single_mut();
