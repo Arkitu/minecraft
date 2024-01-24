@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{input::common_conditions::input_just_pressed, prelude::*};
 use bevy_rapier3d::prelude::*;
 use crate::{render_bloc, BlocFaces, BlocType, FaceMarker, Neighbors};
 
@@ -11,7 +11,7 @@ pub struct HeadPlugin;
 impl Plugin for HeadPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(CameraPlugin)
-            .add_systems(Update, destroy_block);
+            .add_systems(Update, destroy_bloc.run_if(input_just_pressed(MouseButton::Left)));
     }
 }
 
@@ -37,9 +37,8 @@ impl Default for Head {
     }
 }
 
-pub fn destroy_block(
+pub fn destroy_bloc(
     head: Query<&GlobalTransform, With<HeadMarker>>,
-    keys: Res<Input<MouseButton>>,
     rapier_ctx: Res<RapierContext>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -48,9 +47,6 @@ pub fn destroy_block(
     mut blocs: Query<(Entity,&mut Neighbors,&BlocType,&mut BlocFaces)>,
     mut cmds: Commands
 ) {
-    if !keys.just_pressed(MouseButton::Left) {
-        return
-    }
     let global_pos = head.single();
     let (selected_bloc, distance) = match rapier_ctx.cast_ray(
         global_pos.translation(),
