@@ -10,8 +10,13 @@ const RANGE: f32 = 5.0;
 pub struct HeadPlugin;
 impl Plugin for HeadPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(CameraPlugin)
-            .add_systems(Update, destroy_bloc.run_if(input_just_pressed(MouseButton::Left)));
+        app.add_plugins(CameraPlugin);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        app.add_systems(Update, destroy_bloc.run_if(input_just_pressed(MouseButton::Left)));
+
+        #[cfg(target_arch = "wasm32")]
+        app.add_systems(Update, destroy_bloc);
     }
 }
 
@@ -45,8 +50,15 @@ pub fn destroy_bloc(
     asset_server: Res<AssetServer>,
     blocs_types_query: Query<&BlocType>,
     mut blocs: Query<(Entity,&mut Neighbors,&BlocType,&mut BlocFaces)>,
-    mut cmds: Commands
+    mut cmds: Commands,
+    #[cfg(target_arch = "wasm32")]
+    wasm_mouse_tracker: Res<WasmMouseTracker>,
 ) {
+    #[cfg(target_arch = "wasm32")]
+    if !wasm_mouse_tracker.is_mouse_down() {
+        return;
+    }
+
     let global_pos = head.single();
     let (selected_bloc, distance) = match rapier_ctx.cast_ray(
         global_pos.translation(),

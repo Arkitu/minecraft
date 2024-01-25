@@ -36,14 +36,6 @@ fn setup(
             chunks.generate(ChunkPos { x, y: 0, z }, &mut cmds, &chunks_query);
         }
     }
-
-    // Spawn point at origin for debug
-    cmds.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-        material: materials.add(Color::rgb_u8(124, 144, 255).into()),
-        transform: Transform::from_xyz(1.0, 1.0, 1.0),
-        ..default()
-    });
 }
 
 fn render_all(

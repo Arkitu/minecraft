@@ -89,7 +89,7 @@ pub fn cursor_release(
 // Wasm support
 
 #[cfg(target_arch = "wasm32")]
-use std::sync::{Arc, atomic::{AtomicI32, Ordering::SeqCst}};
+use std::sync::{Arc, atomic::{AtomicI32, AtomicBool, Ordering::SeqCst}};
 #[cfg(target_arch = "wasm32")]
 use web_sys::wasm_bindgen::JsCast;
 
@@ -103,6 +103,7 @@ fn get_body() -> web_sys::HtmlElement {
 pub struct WasmMouseTracker {
     delta_x: Arc<AtomicI32>,
     delta_y: Arc<AtomicI32>,
+    mouse_down: Arc<AtomicBool>
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -121,7 +122,22 @@ impl WasmMouseTracker {
             dy.store(mouse_event.movement_y(), SeqCst);
         });
         on_move.forget();
-        Self { delta_x, delta_y }
+
+        let mouse_down = Arc::new(AtomicBool::new(false));
+
+        let md = Arc::clone(&mouse_down);
+        let on_mouse_down = gloo::events::EventListener::new(&get_body(), "mousedown", move |_| {
+            md.store(true, SeqCst);
+        });
+        on_mouse_down.forget();
+
+        let md = Arc::clone(&mouse_down);
+        let on_mouse_up = gloo::events::EventListener::new(&get_body(), "mouseup", move |_| {
+            md.store(false, SeqCst);
+        });
+        on_mouse_up.forget();
+
+        Self { delta_x, delta_y, mouse_down }
     }
 
     pub fn get_delta_and_reset(&self) -> Vec2 {
@@ -132,6 +148,9 @@ impl WasmMouseTracker {
         self.delta_x.store(0, SeqCst);
         self.delta_y.store(0, SeqCst);
         delta
+    }
+    pub fn is_mouse_down(&self) -> bool {
+        self.mouse_down.load(SeqCst)
     }
 }
 
