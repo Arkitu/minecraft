@@ -12,9 +12,7 @@ struct Render;
 fn setup(
     mut cmds: Commands,
     mut chunks: ResMut<Chunks>,
-    chunks_query: Query<(&ChunkPos, &ChunkBlocs)>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>
+    chunks_query: Query<(&ChunkPos, &ChunkBlocs)>
 ) {
     // player
     Player::spawn(&mut cmds);
