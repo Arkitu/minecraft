@@ -1,6 +1,7 @@
 use bevy::{input::common_conditions::input_pressed, prelude::*};
 use bevy_rapier3d::prelude::*;
-use crate::{render_bloc, BlocFaces, BlocType, Neighbors};
+use crate::{render_bloc, BlocFaces, BlocType, FaceMarker, Neighbors};
+use image;
 
 pub mod camera;
 pub use camera::*;
@@ -56,7 +57,7 @@ pub fn destroy_bloc(
     asset_server: Res<AssetServer>,
     blocs_types_query: Query<&BlocType>,
     mut blocs: Query<(Entity,&mut Neighbors,&BlocType,&mut BlocFaces)>,
-    //mut faces: Query<>,
+    mut faces: Query<&mut Handle<Image>, With<FaceMarker>>,
     mut cmds: Commands,
     mut bloc_being_destroyed: Query<&mut BlocBeingDestroyed, With<HeadMarker>>,
     time: Res<Time>,
@@ -100,9 +101,10 @@ pub fn destroy_bloc(
 
     bbd.1 += time.delta_seconds();
 
-    // for x in blocs.get_mut(selected_bloc).unwrap().3.0.iter() {
-    //     let face = 
-    // }
+    for x in blocs.get_mut(selected_bloc).unwrap().3.0.iter() {
+        let face = faces.get_mut(*x).unwrap();
+        let mut material = asset_server. .get_mut(face).unwrap().clone();
+    }
 
     if bbd.1 >= 1.0 {
         let neighbors = blocs.get_mut(selected_bloc).unwrap().1.clone();
