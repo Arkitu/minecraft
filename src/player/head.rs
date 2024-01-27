@@ -56,6 +56,7 @@ pub fn destroy_bloc(
     asset_server: Res<AssetServer>,
     blocs_types_query: Query<&BlocType>,
     mut blocs: Query<(Entity,&mut Neighbors,&BlocType,&mut BlocFaces)>,
+    //mut faces: Query<>,
     mut cmds: Commands,
     mut bloc_being_destroyed: Query<&mut BlocBeingDestroyed, With<HeadMarker>>,
     time: Res<Time>,
@@ -98,6 +99,10 @@ pub fn destroy_bloc(
     }
 
     bbd.1 += time.delta_seconds();
+
+    // for x in blocs.get_mut(selected_bloc).unwrap().3.0.iter() {
+    //     let face = 
+    // }
 
     if bbd.1 >= 1.0 {
         let neighbors = blocs.get_mut(selected_bloc).unwrap().1.clone();

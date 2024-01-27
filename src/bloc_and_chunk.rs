@@ -78,7 +78,7 @@ impl Neighbors {
 }
 
 #[derive(Component, Debug)]
-pub struct BlocFaces (Vec<Entity>);
+pub struct BlocFaces (pub Vec<Entity>);
 
 #[derive(Component, Debug)]
 pub struct Face;
@@ -128,13 +128,14 @@ pub fn render_bloc(
         }
         // load the texture
         let texture_handle = asset_server.load(&format!("{}/{}.png", r#type.to_string(), direction.face_to_render_name()));
+        
         // create a new quad mesh. this is what we will apply the texture to
         let quad_handle = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(
             SQUARE_UNIT,
             SQUARE_UNIT
         ))));
         let material_handle = materials.add(StandardMaterial {
-            base_color_texture: Some(texture_handle.clone()),
+            base_color_texture: Some(texture_handle),
             ..default()
         });
         let (x, y, z) = direction.transform();
