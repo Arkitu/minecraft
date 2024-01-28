@@ -69,6 +69,7 @@ fn main() {
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugins(RapierDebugRenderPlugin::default())
         .add_plugins(PlayerPlugin)
+        .add_plugins(BlocAndChunkPlugin)
         .add_systems(Startup, setup)
         .add_systems(Update, render_all)
         .add_event::<Render>()

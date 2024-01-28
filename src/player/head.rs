@@ -1,6 +1,6 @@
-use bevy::{input::common_conditions::input_pressed, prelude::*};
+use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
-use crate::{render_bloc, BlocFaces, BlocType, FaceMarker, Neighbors};
+use crate::{render_bloc, BaseMaterial, BlocFaces, BlocType, DestructionLevel, FaceMarker, Neighbors, NextMaterial};
 use image;
 
 pub mod camera;
@@ -11,13 +11,9 @@ const RANGE: f32 = 5.0;
 pub struct HeadPlugin;
 impl Plugin for HeadPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(CameraPlugin);
-
-        #[cfg(not(target_arch = "wasm32"))]
-        app.add_systems(Update, destroy_bloc.run_if(input_pressed(MouseButton::Left)));
-
-        #[cfg(target_arch = "wasm32")]
-        app.add_systems(Update, destroy_bloc);
+        app.add_plugins(CameraPlugin)
+            .add_systems(Update, destroy_bloc)
+            .add_systems(Update, reset_destruction_lvl);
     }
 }
 
@@ -57,10 +53,11 @@ pub fn destroy_bloc(
     asset_server: Res<AssetServer>,
     blocs_types_query: Query<&BlocType>,
     mut blocs: Query<(Entity,&mut Neighbors,&BlocType,&mut BlocFaces)>,
-    mut faces: Query<&mut Handle<Image>, With<FaceMarker>>,
+    mut faces: Query<(&mut Handle<StandardMaterial>, &BaseMaterial, &mut NextMaterial, &mut DestructionLevel), With<FaceMarker>>,
     mut cmds: Commands,
     mut bloc_being_destroyed: Query<&mut BlocBeingDestroyed, With<HeadMarker>>,
     time: Res<Time>,
+    images: Res<Assets<Image>>,
     #[cfg(not(target_arch = "wasm32"))]
     mouse: Res<Input<MouseButton>>,
     #[cfg(target_arch = "wasm32")]
@@ -93,7 +90,6 @@ pub fn destroy_bloc(
 
     let mut bloc_being_destroyed = bloc_being_destroyed.single_mut();
     let mut bbd = bloc_being_destroyed.0.unwrap_or((selected_bloc, 0.0));
-    dbg!(bbd);
     
     if bbd.0 != selected_bloc {
         bbd = (selected_bloc, 0.0)
@@ -101,9 +97,25 @@ pub fn destroy_bloc(
 
     bbd.1 += time.delta_seconds();
 
-    for x in blocs.get_mut(selected_bloc).unwrap().3.0.iter() {
-        let face = faces.get_mut(*x).unwrap();
-        let mut material = asset_server. .get_mut(face).unwrap().clone();
+    if let None = bloc_being_destroyed.0 {
+        let crack = image::open("assets/cracks/crack_4.png").unwrap();
+        let bloc = blocs.get_mut(selected_bloc).unwrap();
+        for x in bloc.3.0.iter() {
+            let (_, base_mat, mut next_mat, mut destruction_lvl) = faces.get_mut(*x).unwrap();
+            let mut material = materials.get(base_mat.0.id()).unwrap().clone();
+            let mut img = images.get(material.base_color_texture.unwrap().id()).unwrap().clone();
+            for (i, c) in img.data.chunks_mut(4).zip(crack.as_bytes().chunks(4)) {
+                let c3 = c[3] as u16;
+                *i.get_mut(0).unwrap() = (((i[0] as u16 * (255-c3)) + (c[0] as u16 * c3)) / (255)) as u8;
+                *i.get_mut(1).unwrap() = (((i[1] as u16 * (255-c3)) + (c[1] as u16 * c3)) / (255)) as u8;
+                *i.get_mut(2).unwrap() = (((i[2] as u16 * (255-c3)) + (c[2] as u16 * c3)) / (255)) as u8;
+            }
+            material.base_color_texture = Some(asset_server.add(img));
+            next_mat.0 = Some(asset_server.add(material));
+            *destruction_lvl = DestructionLevel::Four;
+            //*face = asset_server.add(material);
+        }
+        
     }
 
     if bbd.1 >= 1.0 {
@@ -145,5 +157,29 @@ pub fn destroy_bloc(
         bloc_being_destroyed.0 = None;
     } else {
         bloc_being_destroyed.0 = Some(bbd);
+    }
+}
+
+pub fn reset_destruction_lvl(
+    mut faces: Query<(&Parent, &mut DestructionLevel, &BaseMaterial, &mut NextMaterial), With<FaceMarker>>,
+    bbd: Query<&BlocBeingDestroyed, With<HeadMarker>>
+) {
+    let bbd = bbd.single();
+    for (parent, mut lvl, base_mat, mut next_mat) in faces.iter_mut() {
+        if lvl.as_ref() != &DestructionLevel::Zero {
+            dbg!(&base_mat.0, &next_mat.0);
+            match bbd.0 {
+                Some(bbd) => {
+                    if parent.get() != bbd.0 {
+                        next_mat.0 = Some(base_mat.0.clone());
+                        *lvl = DestructionLevel::Zero;
+                    }
+                },
+                None => {
+                    next_mat.0 = Some(base_mat.0.clone());
+                    *lvl = DestructionLevel::Zero;
+                }
+            }
+        }
     }
 }

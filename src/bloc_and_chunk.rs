@@ -2,13 +2,23 @@ use bevy::{prelude::*, utils::HashMap};
 use bevy_rapier3d::prelude::*;
 use arr_macro::arr;
 
+mod textures;
+use textures::*;
+
 pub const CHUNK_X: usize = 4; // Right
 pub const CHUNK_Y: usize = 8; // Up
 pub const CHUNK_Z: usize = 4; // Front
 
 pub const SQUARE_UNIT: f32 = 1.0;
 
-#[derive(Component, Debug, Clone, Copy, PartialEq)]
+pub struct BlocAndChunkPlugin;
+impl Plugin for BlocAndChunkPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, apply_next_material);
+    }
+}
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BlocType {
     Dirt,
     Grass,
@@ -92,6 +102,22 @@ impl Default for BlocFaces {
 #[derive(Component)]
 pub struct FaceMarker;
 
+#[derive(Component)]
+pub struct BaseMaterial(pub Handle<StandardMaterial>);
+
+#[derive(Component)]
+pub struct NextMaterial(pub Option<Handle<StandardMaterial>>);
+
+#[derive(Component, PartialEq, Eq, Hash)]
+pub enum DestructionLevel {
+    Zero = 0,
+    One = 1,
+    Two = 2,
+    Three = 3,
+    Four = 4,
+    Five = 5
+}
+
 #[derive(Bundle)]
 pub struct Bloc {
     pos: Pos,
@@ -99,7 +125,7 @@ pub struct Bloc {
     r#type: BlocType,
     faces: BlocFaces,
     rigid_body: RigidBody,
-    transform: TransformBundle,
+    spatial: SpatialBundle,
     collision_groups: CollisionGroups
 }
 
@@ -141,14 +167,14 @@ pub fn render_bloc(
         let (x, y, z) = direction.transform();
         let id = cmds.spawn((PbrBundle {
             mesh: quad_handle.clone(),
-            material: material_handle,
+            material: material_handle.clone(),
             transform: Transform::from_xyz(
                 x * SQUARE_UNIT,
                 y * SQUARE_UNIT,
                 z * SQUARE_UNIT
             ).looking_to(direction.looking_to(), Vec3::ZERO),
             ..default()
-        }, FaceMarker)).id();
+        }, FaceMarker, DestructionLevel::Zero, BaseMaterial(material_handle), NextMaterial(None))).id();
         faces.push(id);
     }
     for f in old_faces.0.iter() {
@@ -204,7 +230,7 @@ impl Into<Pos> for ChunkPos {
     }
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Direction {
     Up, // +y
     Down, // -y
@@ -294,7 +320,7 @@ impl ChunkBlocs {
                     pos.z += z as i32;
                     let bloc = Bloc {
                         pos: pos.clone(),
-                        transform: TransformBundle::from_transform(pos.into()),
+                        spatial: SpatialBundle::from_transform(pos.into()),
                         rigid_body: RigidBody::Fixed,
                         neighbors: Neighbors {
                             up: if y == (CHUNK_Y-1) as u8 {
@@ -428,5 +454,25 @@ impl Chunks {
 
         let chunk = Chunk::new_with_blocs(pos, blocs);
         self.insert(pos, cmds.spawn(chunk).id());
+    }
+}
+
+pub fn apply_next_material(
+    mut faces: Query<(&mut Handle<StandardMaterial>, &mut NextMaterial), With<FaceMarker>>,
+    asset_server: Res<AssetServer>
+) {
+    for (mut face, mut next_mat) in faces.iter_mut() {
+        dbg!(asset_server.load_state(face.id()));
+        if let Some(nm) = &next_mat.0 {
+            // if let None = asset_server.get_load_state(nm.id()) {
+            //     asset_server.load_state(id)
+            // }
+            dbg!(nm, asset_server.is_loaded_with_dependencies(nm.id()), asset_server.load_state(nm.id()), nm.path());
+            if asset_server.is_loaded_with_dependencies(nm.id()) {
+                dbg!("loaded");
+                *face = nm.clone();
+                next_mat.0 = None;
+            }
+        }
     }
 }
