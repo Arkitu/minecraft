@@ -2,9 +2,6 @@ use bevy::{prelude::*, utils::HashMap};
 use bevy_rapier3d::prelude::*;
 use arr_macro::arr;
 
-mod textures;
-use textures::*;
-
 pub const CHUNK_X: usize = 4; // Right
 pub const CHUNK_Y: usize = 8; // Up
 pub const CHUNK_Z: usize = 4; // Front
@@ -458,17 +455,17 @@ impl Chunks {
 }
 
 pub fn apply_next_material(
-    mut faces: Query<(&mut Handle<StandardMaterial>, &mut NextMaterial), With<FaceMarker>>,
+    mut faces: Query<(&mut Handle<StandardMaterial>, &mut NextMaterial, &BaseMaterial), With<FaceMarker>>,
     asset_server: Res<AssetServer>
 ) {
-    for (mut face, mut next_mat) in faces.iter_mut() {
+    for (mut face, mut next_mat, base_mat) in faces.iter_mut() {
         dbg!(asset_server.load_state(face.id()));
         if let Some(nm) = &next_mat.0 {
             // if let None = asset_server.get_load_state(nm.id()) {
             //     asset_server.load_state(id)
             // }
             dbg!(nm, asset_server.is_loaded_with_dependencies(nm.id()), asset_server.load_state(nm.id()), nm.path());
-            if asset_server.is_loaded_with_dependencies(nm.id()) {
+            if asset_server.is_loaded_with_dependencies(nm.id()) || nm == &base_mat.0 {
                 dbg!("loaded");
                 *face = nm.clone();
                 next_mat.0 = None;
