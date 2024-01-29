@@ -167,7 +167,6 @@ pub fn reset_destruction_lvl(
     let bbd = bbd.single();
     for (parent, mut lvl, base_mat, mut next_mat) in faces.iter_mut() {
         if lvl.as_ref() != &DestructionLevel::Zero {
-            dbg!(&base_mat.0, &next_mat.0);
             match bbd.0 {
                 Some(bbd) => {
                     if parent.get() != bbd.0 {

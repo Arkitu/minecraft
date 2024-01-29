@@ -459,14 +459,8 @@ pub fn apply_next_material(
     asset_server: Res<AssetServer>
 ) {
     for (mut face, mut next_mat, base_mat) in faces.iter_mut() {
-        dbg!(asset_server.load_state(face.id()));
         if let Some(nm) = &next_mat.0 {
-            // if let None = asset_server.get_load_state(nm.id()) {
-            //     asset_server.load_state(id)
-            // }
-            dbg!(nm, asset_server.is_loaded_with_dependencies(nm.id()), asset_server.load_state(nm.id()), nm.path());
             if asset_server.is_loaded_with_dependencies(nm.id()) || nm == &base_mat.0 {
-                dbg!("loaded");
                 *face = nm.clone();
                 next_mat.0 = None;
             }
