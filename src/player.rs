@@ -5,7 +5,7 @@ mod head;
 pub use head::{*, Head};
 
 const SPEED: f32 = 0.4;
-const JUMP_SPEED: f32 = 0.15;
+const JUMP_SPEED: f32 = 0.11;
 const PLAYER_HITBOX_RADIUS: f32 = 0.33;
 const PLAYER_HITBOX_HEIGHT: f32 = 1.8;
 

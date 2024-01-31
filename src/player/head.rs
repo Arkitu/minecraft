@@ -95,10 +95,23 @@ pub fn destroy_bloc(
         bbd = (selected_bloc, 0.0)
     }
 
+    let old_time = bbd.1;
     bbd.1 += time.delta_seconds();
 
-    if let None = bloc_being_destroyed.0 {
-        let crack = image::open("assets/cracks/crack_4.png").unwrap();
+    let crack = if old_time < 0.2 && bbd.1 >= 0.2 {
+        Some("1")
+    } else if old_time < 0.4 && bbd.1 >= 0.4 {
+        Some("2")
+    } else if old_time < 0.6 && bbd.1 >= 0.6 {
+        Some("3")
+    } else if old_time < 0.8 && bbd.1 >= 0.8 {
+        Some("4")
+    } else {
+        None
+    };
+
+    if let Some(crack) = crack {
+        let crack = image::open(format!("assets/cracks/crack_{}.png", crack)).unwrap();
         let bloc = blocs.get_mut(selected_bloc).unwrap();
         for x in bloc.3.0.iter() {
             let (_, base_mat, mut next_mat, mut destruction_lvl) = faces.get_mut(*x).unwrap();
