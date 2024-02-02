@@ -1,8 +1,8 @@
 use bevy::{prelude::*, window::ApplicationLifetime};
 use bevy_rapier3d::prelude::*;
 
-pub mod bloc_and_chunk;
-use bloc_and_chunk::*;
+pub mod blocs;
+use blocs::*;
 pub mod player;
 use player::*;
 

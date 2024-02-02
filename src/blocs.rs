@@ -8,10 +8,14 @@ pub const CHUNK_Z: usize = 4; // Front
 
 pub const SQUARE_UNIT: f32 = 1.0;
 
+pub mod cracks;
+pub use cracks::*;
+
 pub struct BlocAndChunkPlugin;
 impl Plugin for BlocAndChunkPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, apply_next_material);
+        app.add_plugins(CracksPlugin)
+            .add_systems(Update, apply_next_material);
     }
 }
 

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
-use crate::{render_bloc, BaseMaterial, BlocFaces, BlocType, DestructionLevel, FaceMarker, Neighbors, NextMaterial};
+use crate::{render_bloc, BaseMaterial, BlocFaces, BlocType, Cracks, DestructionLevel, FaceMarker, Neighbors, NextMaterial};
 use image;
 
 pub mod camera;
@@ -58,6 +58,7 @@ pub fn destroy_bloc(
     mut bloc_being_destroyed: Query<&mut BlocBeingDestroyed, With<HeadMarker>>,
     time: Res<Time>,
     images: Res<Assets<Image>>,
+    cracks: Res<Cracks>,
     #[cfg(not(target_arch = "wasm32"))]
     mouse: Res<Input<MouseButton>>,
     #[cfg(target_arch = "wasm32")]
@@ -89,35 +90,45 @@ pub fn destroy_bloc(
     };
 
     let mut bloc_being_destroyed = bloc_being_destroyed.single_mut();
-    let mut bbd = bloc_being_destroyed.0.unwrap_or((selected_bloc, 0.0));
+    let (mut bbd, crack) = match bloc_being_destroyed.0 {
+        None => {
+            ((selected_bloc, 0.0),Some(0.0))
+        },
+        Some(bbd) => {
+            if bbd.0 != selected_bloc {
+                bbd = (selected_bloc, 0.0)
+            }
+            (bbd,)
+        }
+    };
     
-    if bbd.0 != selected_bloc {
-        bbd = (selected_bloc, 0.0)
-    }
+    
 
     let old_time = bbd.1;
     bbd.1 += time.delta_seconds();
 
-    let crack = if old_time < 0.2 && bbd.1 >= 0.2 {
-        Some("1")
+    let crack = if old_time > bbd.1 {
+        Some(0)
+    } else if old_time < 0.2 && bbd.1 >= 0.2 {
+        Some(1)
     } else if old_time < 0.4 && bbd.1 >= 0.4 {
-        Some("2")
+        Some(2)
     } else if old_time < 0.6 && bbd.1 >= 0.6 {
-        Some("3")
+        Some(3)
     } else if old_time < 0.8 && bbd.1 >= 0.8 {
-        Some("4")
+        Some(4)
     } else {
         None
     };
 
     if let Some(crack) = crack {
-        let crack = image::open(format!("assets/cracks/crack_{}.png", crack)).unwrap();
+        let crack = images.get(cracks.0[crack].id()).unwrap();//image::open(format!("assets/cracks/crack_{}.png", crack)).unwrap();
         let bloc = blocs.get_mut(selected_bloc).unwrap();
         for x in bloc.3.0.iter() {
             let (_, base_mat, mut next_mat, mut destruction_lvl) = faces.get_mut(*x).unwrap();
             let mut material = materials.get(base_mat.0.id()).unwrap().clone();
             let mut img = images.get(material.base_color_texture.unwrap().id()).unwrap().clone();
-            for (i, c) in img.data.chunks_mut(4).zip(crack.as_bytes().chunks(4)) {
+            for (i, c) in img.data.chunks_mut(4).zip(crack.data.chunks(4)) {
                 let c3 = c[3] as u16;
                 *i.get_mut(0).unwrap() = (((i[0] as u16 * (255-c3)) + (c[0] as u16 * c3)) / (255)) as u8;
                 *i.get_mut(1).unwrap() = (((i[1] as u16 * (255-c3)) + (c[1] as u16 * c3)) / (255)) as u8;
