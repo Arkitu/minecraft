@@ -90,39 +90,34 @@ pub fn destroy_bloc(
     };
 
     let mut bloc_being_destroyed = bloc_being_destroyed.single_mut();
-    let (mut bbd, crack) = match bloc_being_destroyed.0 {
+    let (bbd, crack) = match bloc_being_destroyed.0 {
         None => {
-            ((selected_bloc, 0.0),Some(0.0))
+            ((selected_bloc, 0.0),Some(0))
         },
-        Some(bbd) => {
+        Some(mut bbd) => {
             if bbd.0 != selected_bloc {
-                bbd = (selected_bloc, 0.0)
+                ((selected_bloc, 0.0), Some(0))
+            } else {
+                let old_time = bbd.1;
+                bbd.1 += time.delta_seconds();
+                let crack = if old_time < 0.2 && bbd.1 >= 0.2 {
+                    Some(1)
+                } else if old_time < 0.4 && bbd.1 >= 0.4 {
+                    Some(2)
+                } else if old_time < 0.6 && bbd.1 >= 0.6 {
+                    Some(3)
+                } else if old_time < 0.8 && bbd.1 >= 0.8 {
+                    Some(4)
+                } else {
+                    None
+                };
+                (bbd, crack)
             }
-            (bbd,)
         }
-    };
-    
-    
-
-    let old_time = bbd.1;
-    bbd.1 += time.delta_seconds();
-
-    let crack = if old_time > bbd.1 {
-        Some(0)
-    } else if old_time < 0.2 && bbd.1 >= 0.2 {
-        Some(1)
-    } else if old_time < 0.4 && bbd.1 >= 0.4 {
-        Some(2)
-    } else if old_time < 0.6 && bbd.1 >= 0.6 {
-        Some(3)
-    } else if old_time < 0.8 && bbd.1 >= 0.8 {
-        Some(4)
-    } else {
-        None
     };
 
     if let Some(crack) = crack {
-        let crack = images.get(cracks.0[crack].id()).unwrap();//image::open(format!("assets/cracks/crack_{}.png", crack)).unwrap();
+        let crack = images.get(cracks.0[crack].id()).unwrap();
         let bloc = blocs.get_mut(selected_bloc).unwrap();
         for x in bloc.3.0.iter() {
             let (_, base_mat, mut next_mat, mut destruction_lvl) = faces.get_mut(*x).unwrap();
