@@ -12,7 +12,8 @@ struct Render;
 fn setup<G: Generator>(
     mut cmds: Commands,
     mut chunks: ResMut<Chunks<G>>,
-    chunks_query: Query<(&ChunkPos, &ChunkBlocs)>
+    chunks_query: Query<(&ChunkPos, &ChunkBlocs)>,
+    mut blocs_query: Query<&mut Neighbors>
 ) {
     // player
     Player::spawn(&mut cmds);
@@ -31,7 +32,7 @@ fn setup<G: Generator>(
 
     for x in -1..=1 {
         for z in -1..=1 {
-            chunks.generate(ChunkPos { x, y: 0, z }, &mut cmds, &chunks_query);
+            chunks.generate(ChunkPos { x, y: 0, z }, &mut cmds, &chunks_query, &mut blocs_query);
         }
     }
 }
@@ -73,7 +74,7 @@ fn main() {
         .add_systems(Startup, setup::<DefaultGenerator>)
         .add_systems(Update, render_all)
         .add_event::<Render>()
-        .insert_resource(Chunks::<DefaultGenerator>::new(0));
+        .insert_resource(Chunks::<DefaultGenerator>::new());
 
     app.run();
 }

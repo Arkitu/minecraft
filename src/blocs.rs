@@ -1,3 +1,5 @@
+use std::iter;
+
 use bevy::{prelude::*, utils::HashMap};
 use bevy_rapier3d::prelude::*;
 use arr_macro::arr;
@@ -450,7 +452,7 @@ pub struct Chunks<G: Generator> {
     generator: G
 }
 impl<G: Generator> Chunks<G> {
-    pub fn new(seed: u64) -> Self {
+    pub fn new() -> Self {
         Self {
             inner: HashMap::new(),
             generator: G::default()
@@ -462,7 +464,7 @@ impl<G: Generator> Chunks<G> {
     pub fn get(&self, pos: ChunkPos) -> Option<&Entity> {
         self.inner.get(&pos)
     }
-    pub fn generate(&mut self, pos: ChunkPos, cmds: &mut Commands, chunks_query: &Query<(&ChunkPos, &ChunkBlocs)>) {
+    pub fn generate(&mut self, pos: ChunkPos, cmds: &mut Commands, chunks_query: &Query<(&ChunkPos, &ChunkBlocs)>, blocs_query: &mut Query<&mut Neighbors>) {
         // return if there is already a chunk
         if let Some(_) = self.get(pos) {
             return
@@ -472,6 +474,46 @@ impl<G: Generator> Chunks<G> {
 
         let chunk = Chunk::new_with_blocs(pos, blocs);
         self.insert(pos, cmds.spawn(chunk).id());
+    }
+    /// Fill the neighbors of the edge blocs for each chunk
+    /// /!\ This assumes that the chunks and blocs are already spawned and that the chunks are neighbors
+    pub fn link(&self, pos1: ChunkPos, pos2: ChunkPos, chunks_query: &Query<(&ChunkPos, &ChunkBlocs)>, blocs_query: &mut Query<&mut Neighbors>) {
+        let chunk1 = chunks_query.get(*self.get(pos1).unwrap()).expect("Cannot find chunk 1");
+        let chunk2 = chunks_query.get(*self.get(pos2).unwrap()).expect("Cannot find chunk 2");
+        let blocs1 = chunk1.1;
+        let blocs2 = chunk2.1;
+        let x_iter = if pos1.x < pos2.x {
+            CHUNK_X as u8-1..=CHUNK_X as u8-1
+        } else if pos1.x > pos2.x {
+            0..=0
+        } else {
+            0..=CHUNK_X as u8-1
+        };
+        let y_iter = if pos1.y < pos2.y {
+            CHUNK_Y as u8-1..=CHUNK_Y as u8-1
+        } else if pos1.y > pos2.y {
+            0..=0
+        } else {
+            0..=CHUNK_Y as u8-1
+        };
+        let z_iter = if pos1.z < pos2.z {
+            CHUNK_Z as u8-1..=CHUNK_Z as u8-1
+        } else if pos1.z > pos2.z {
+            0..=0
+        } else {
+            0..=CHUNK_Z as u8-1
+        };
+        for x in x_iter {
+            for y in y_iter.clone() {
+                for z in z_iter.clone() {
+                    let pos_in_chunk = PosInChunk { x, y, z };
+                    let bloc1 = blocs1.get(&pos_in_chunk).expect("Cannot find bloc 1");
+                    let bloc2 = blocs2.get(&pos_in_chunk).expect("Cannot find bloc 2");
+                    let neighbors = blocs_query.get_many_mut([*bloc1, *bloc2]).expect("Cannot find neighbors 1");
+                    todo!("Link the neighbors")
+                }
+            }
+        }
     }
 }
 
