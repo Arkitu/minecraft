@@ -8,6 +8,8 @@ pub const CHUNK_Z: usize = 4; // Front
 
 pub const SQUARE_UNIT: f32 = 1.0;
 
+pub type DefaultGenerator = FlatWordGenerator;
+
 pub mod cracks;
 pub use cracks::*;
 
@@ -415,16 +417,43 @@ impl Chunk {
     }
 }
 
-#[derive(Resource)]
-pub struct Chunks {
-    inner: HashMap<ChunkPos, Entity>,
-    seed: u64
+pub trait Generator: Send + std::marker::Sync + 'static + Default {
+    fn generate(&self, pos: ChunkPos) -> [BlocType; CHUNK_X*CHUNK_Y*CHUNK_Z];
 }
-impl Chunks {
+pub struct FlatWordGenerator;
+impl Default for FlatWordGenerator {
+    fn default() -> Self {
+        Self
+    }
+}
+impl Generator for FlatWordGenerator {
+    fn generate(&self, pos: ChunkPos) -> [BlocType; CHUNK_X*CHUNK_Y*CHUNK_Z] {
+        let mut types = [BlocType::Air; CHUNK_X*CHUNK_Y*CHUNK_Z];
+        for x in 0..CHUNK_X as u8 {
+            for z in 0..CHUNK_Z as u8 {
+                for y in 0..3 {
+                    types[PosInChunk { x, y, z }.to_chunk_index()] = BlocType::Stone;
+                }
+                for y in 3..4 {
+                    types[PosInChunk { x, y, z }.to_chunk_index()] = BlocType::Grass;
+                }
+            }
+        }
+        types[PosInChunk { x:1, y:4, z:1 }.to_chunk_index()] = BlocType::Stone;
+        return types
+    }
+}
+
+#[derive(Resource)]
+pub struct Chunks<G: Generator> {
+    inner: HashMap<ChunkPos, Entity>,
+    generator: G
+}
+impl<G: Generator> Chunks<G> {
     pub fn new(seed: u64) -> Self {
         Self {
             inner: HashMap::new(),
-            seed
+            generator: G::default()
         }
     }
     pub fn insert(&mut self, pos: ChunkPos, chunk: Entity) {
@@ -438,19 +467,7 @@ impl Chunks {
         if let Some(_) = self.get(pos) {
             return
         }
-        let mut types = [BlocType::Air; CHUNK_X*CHUNK_Y*CHUNK_Z];
-
-        for x in 0..CHUNK_X as u8 {
-            for z in 0..CHUNK_Z as u8 {
-                for y in 0..3 {
-                    types[PosInChunk { x, y, z }.to_chunk_index()] = BlocType::Stone;
-                }
-                for y in 3..4 {
-                    types[PosInChunk { x, y, z }.to_chunk_index()] = BlocType::Grass;
-                }
-            }
-        }
-        types[PosInChunk { x:1, y:4, z:1 }.to_chunk_index()] = BlocType::Stone;
+        let types = self.generator.generate(pos);
         let blocs = ChunkBlocs::new(pos, &types, cmds);
 
         let chunk = Chunk::new_with_blocs(pos, blocs);

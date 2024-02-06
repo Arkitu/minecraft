@@ -9,9 +9,9 @@ use player::*;
 #[derive(Event)]
 struct Render;
 
-fn setup(
+fn setup<G: Generator>(
     mut cmds: Commands,
-    mut chunks: ResMut<Chunks>,
+    mut chunks: ResMut<Chunks<G>>,
     chunks_query: Query<(&ChunkPos, &ChunkBlocs)>
 ) {
     // player
@@ -70,10 +70,10 @@ fn main() {
         .add_plugins(RapierDebugRenderPlugin::default())
         .add_plugins(PlayerPlugin)
         .add_plugins(BlocAndChunkPlugin)
-        .add_systems(Startup, setup)
+        .add_systems(Startup, setup::<DefaultGenerator>)
         .add_systems(Update, render_all)
         .add_event::<Render>()
-        .insert_resource(Chunks::new(0));
+        .insert_resource(Chunks::<DefaultGenerator>::new(0));
 
     app.run();
 }
