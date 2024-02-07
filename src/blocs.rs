@@ -19,7 +19,8 @@ pub struct BlocAndChunkPlugin;
 impl Plugin for BlocAndChunkPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(CracksPlugin)
-            .add_systems(Update, apply_next_material);
+            .add_systems(Update, apply_next_material)
+            .add_systems(Update, link_chunks::<DefaultGenerator>);
     }
 }
 
@@ -60,7 +61,7 @@ impl Into<Transform> for Pos {
     }
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Reflect, Debug, Clone)]
 pub struct Neighbors {
     pub up: Option<Entity>,
     pub down: Option<Entity>,
@@ -390,25 +391,41 @@ impl ChunkBlocs {
     }
 }
 
-#[derive(Component, Default)]
-pub struct ChunkFaces (Vec<Entity>);
+#[derive(Component)]
+pub struct ChunkNeighborsAreLinked {
+    up: bool,
+    right: bool,
+    front: bool,
+}
+impl Default for ChunkNeighborsAreLinked {
+    fn default() -> Self {
+        Self {
+            up: false,
+            right: false,
+            front: false
+        }
+    }
+}
 
 #[derive(Bundle)]
 pub struct Chunk {
     blocs: ChunkBlocs,
-    pos: ChunkPos
+    pos: ChunkPos,
+    neighbors_are_linked: ChunkNeighborsAreLinked
 }
 impl Chunk {
     pub fn new_empty(pos: ChunkPos, cmds: &mut Commands) -> Self {
         Self {
             pos,
-            blocs: ChunkBlocs::new_empty(pos, cmds)
+            blocs: ChunkBlocs::new_empty(pos, cmds),
+            neighbors_are_linked: ChunkNeighborsAreLinked::default()
         }
     }
     pub fn new_with_blocs(pos: ChunkPos, blocs: ChunkBlocs) -> Self {
         Self {
             pos,
-            blocs
+            blocs,
+            neighbors_are_linked: ChunkNeighborsAreLinked::default()
         }
     }
     pub fn get(&self, pos:&PosInChunk) -> Option<&Entity> {
@@ -475,45 +492,66 @@ impl<G: Generator> Chunks<G> {
         let chunk = Chunk::new_with_blocs(pos, blocs);
         self.insert(pos, cmds.spawn(chunk).id());
     }
-    /// Fill the neighbors of the edge blocs for each chunk
-    /// /!\ This assumes that the chunks and blocs are already spawned and that the chunks are neighbors
-    pub fn link(&self, pos1: ChunkPos, pos2: ChunkPos, chunks_query: &Query<(&ChunkPos, &ChunkBlocs)>, blocs_query: &mut Query<&mut Neighbors>) {
-        let chunk1 = chunks_query.get(*self.get(pos1).unwrap()).expect("Cannot find chunk 1");
-        let chunk2 = chunks_query.get(*self.get(pos2).unwrap()).expect("Cannot find chunk 2");
-        let blocs1 = chunk1.1;
-        let blocs2 = chunk2.1;
+    /// * Fill the neighbors of the edge blocs for each chunk
+    /// * /!\ This assumes that the blocs are already spawned and that the chunks are neighbors
+    /// * Errors if the chunks are not spawned
+    pub fn link(&self, pos1: ChunkPos, pos2: ChunkPos, blocs1: &ChunkBlocs, blocs2: &ChunkBlocs, blocs_query: &mut Query<&mut Neighbors>) -> Result<(), ()> {
+        // let blocss = (
+        //     chunks_query.get(*self.get(pos1).unwrap()).expect("Cannot find chunk 1"),
+        //     chunks_query.get(*self.get(pos2).unwrap()).expect("Cannot find chunk 2")
+        // );
         let x_iter = if pos1.x < pos2.x {
-            CHUNK_X as u8-1..=CHUNK_X as u8-1
+            (CHUNK_X as u8-1..=CHUNK_X as u8-1).into_iter().zip(0..=0)
         } else if pos1.x > pos2.x {
-            0..=0
+            (0..=0).into_iter().zip(CHUNK_X as u8-1..=CHUNK_X as u8-1)
         } else {
-            0..=CHUNK_X as u8-1
+            (0..=CHUNK_X as u8-1).into_iter().zip(0..=CHUNK_X as u8-1)
         };
         let y_iter = if pos1.y < pos2.y {
-            CHUNK_Y as u8-1..=CHUNK_Y as u8-1
+            (CHUNK_Y as u8-1..=CHUNK_Y as u8-1).into_iter().zip(0..=0)
         } else if pos1.y > pos2.y {
-            0..=0
+            (0..=0).into_iter().zip(CHUNK_Y as u8-1..=CHUNK_Y as u8-1)
         } else {
-            0..=CHUNK_Y as u8-1
+            (0..=CHUNK_Y as u8-1).into_iter().zip(0..=CHUNK_Y as u8-1)
         };
         let z_iter = if pos1.z < pos2.z {
-            CHUNK_Z as u8-1..=CHUNK_Z as u8-1
+            (CHUNK_Z as u8-1..=CHUNK_Z as u8-1).into_iter().zip(0..=0)
         } else if pos1.z > pos2.z {
-            0..=0
+            (0..=0).into_iter().zip(CHUNK_Z as u8-1..=CHUNK_Z as u8-1)
         } else {
-            0..=CHUNK_Z as u8-1
+            (0..=CHUNK_Z as u8-1).into_iter().zip(0..=CHUNK_Z as u8-1)
         };
         for x in x_iter {
             for y in y_iter.clone() {
                 for z in z_iter.clone() {
-                    let pos_in_chunk = PosInChunk { x, y, z };
-                    let bloc1 = blocs1.get(&pos_in_chunk).expect("Cannot find bloc 1");
-                    let bloc2 = blocs2.get(&pos_in_chunk).expect("Cannot find bloc 2");
-                    let neighbors = blocs_query.get_many_mut([*bloc1, *bloc2]).expect("Cannot find neighbors 1");
-                    todo!("Link the neighbors")
+                    let blocs = (
+                        *blocs1.get(&PosInChunk { x: x.0, y: y.0, z: z.0 }).expect("Cannot find bloc 1"),
+                        *blocs2.get(&PosInChunk { x: x.1, y: y.1, z: z.1 }).expect("Cannot find bloc 2")
+                    );
+                    let mut neighbors = blocs_query.get_many_mut([blocs.0, blocs.1]).expect("Cannot find neighbors 1");
+                    if pos1.x < pos2.x {
+                        neighbors[0].right = Some(blocs.1);
+                        neighbors[1].left = Some(blocs.0);
+                    } else if pos1.x > pos2.x {
+                        neighbors[0].left = Some(blocs.1);
+                        neighbors[1].right = Some(blocs.0);
+                    } else if pos1.y < pos2.y {
+                        neighbors[0].up = Some(blocs.1);
+                        neighbors[1].down = Some(blocs.0);
+                    } else if pos1.y > pos2.y {
+                        neighbors[0].down = Some(blocs.1);
+                        neighbors[1].up = Some(blocs.0);
+                    } else if pos1.z < pos2.z {
+                        neighbors[0].front = Some(blocs.1);
+                        neighbors[1].back = Some(blocs.0);
+                    } else if pos1.z > pos2.z {
+                        neighbors[0].back = Some(blocs.1);
+                        neighbors[1].front = Some(blocs.0);
+                    }
                 }
             }
         }
+        Ok(())
     }
 }
 
@@ -526,6 +564,58 @@ pub fn apply_next_material(
             if asset_server.is_loaded_with_dependencies(nm.id()) || nm == &base_mat.0 {
                 *face = nm.clone();
                 next_mat.0 = None;
+            }
+        }
+    }
+}
+
+pub fn link_chunks<G: Generator>(
+    chunks: Res<Chunks<G>>,
+    mut nal_query: Query<(Entity, &mut ChunkNeighborsAreLinked)>,
+    chunks_query: Query<(&ChunkPos, &ChunkBlocs)>,
+    mut blocs_query: Query<&mut Neighbors>
+) {
+    for (id, mut nal) in nal_query.iter_mut() {
+        if nal.up && nal.right && nal.front {
+            continue
+        }
+        let (pos1, blocs1) = chunks_query.get(id).unwrap();
+        let mut neighbors = Vec::new();
+        if !nal.up {
+            neighbors.push((ChunkPos {
+                x: pos1.x,
+                y: pos1.y + 1,
+                z: pos1.z
+            }, 0));
+        }
+        if !nal.right {
+            neighbors.push((ChunkPos {
+                x: pos1.x + 1,
+                y: pos1.y,
+                z: pos1.z
+            }, 1));
+        }
+        if !nal.front {
+            neighbors.push((ChunkPos {
+                x: pos1.x,
+                y: pos1.y,
+                z: pos1.z + 1
+            }, 2));
+        }
+        for (pos2, val_to_change) in neighbors {
+            let (pos2, blocs2) = chunks_query.get(
+                *match chunks.get(pos2) {
+                    Some(c) => c,
+                    None => continue
+                }
+            ).unwrap();
+            if let Ok(_) = chunks.link(*pos1, *pos2, blocs1, blocs2, &mut blocs_query) {
+                match val_to_change {
+                    0 => nal.up = true,
+                    1 => nal.right = true,
+                    2 => nal.front = true,
+                    _ => {}
+                }
             }
         }
     }

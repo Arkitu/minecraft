@@ -119,6 +119,7 @@ pub fn destroy_bloc(
     if let Some(crack) = crack {
         let crack = images.get(cracks.0[crack].id()).unwrap();
         let bloc = blocs.get_mut(selected_bloc).unwrap();
+        dbg!(bloc.1);
         for x in bloc.3.0.iter() {
             let (_, base_mat, mut next_mat, mut destruction_lvl) = faces.get_mut(*x).unwrap();
             let mut material = materials.get(base_mat.0.id()).unwrap().clone();
