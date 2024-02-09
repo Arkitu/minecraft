@@ -5,6 +5,8 @@ pub mod blocs;
 use blocs::*;
 pub mod player;
 use player::*;
+pub mod game_state;
+use game_state::*;
 
 #[derive(Event)]
 struct Render;
