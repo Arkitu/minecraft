@@ -90,7 +90,7 @@ pub fn destroy_bloc(
     };
 
     let mut bloc_being_destroyed = bloc_being_destroyed.single_mut();
-    let (bbd, crack) = match bloc_being_destroyed.0 {
+    let (bbd, crack_lvl) = match bloc_being_destroyed.0 {
         None => {
             ((selected_bloc, 0.0),Some(0))
         },
@@ -116,10 +116,9 @@ pub fn destroy_bloc(
         }
     };
 
-    if let Some(crack) = crack {
+    if let Some(crack) = crack_lvl {
         let crack = images.get(cracks.0[crack].id()).unwrap();
         let bloc = blocs.get_mut(selected_bloc).unwrap();
-        dbg!(bloc.1);
         for x in bloc.3.0.iter() {
             let (_, base_mat, mut next_mat, mut destruction_lvl) = faces.get_mut(*x).unwrap();
             let mut material = materials.get(base_mat.0.id()).unwrap().clone();
@@ -132,10 +131,16 @@ pub fn destroy_bloc(
             }
             material.base_color_texture = Some(asset_server.add(img));
             next_mat.0 = Some(asset_server.add(material));
-            *destruction_lvl = DestructionLevel::Four;
-            //*face = asset_server.add(material);
+            *destruction_lvl = match crack_lvl {
+                None => DestructionLevel::Zero,
+                Some(0) => DestructionLevel::One,
+                Some(1) => DestructionLevel::Two,
+                Some(2) => DestructionLevel::Three,
+                Some(3) => DestructionLevel::Four,
+                Some(4) => DestructionLevel::Five,
+                _ => unreachable!()
+            };
         }
-        
     }
 
     if bbd.1 >= 1.0 {

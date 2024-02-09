@@ -116,12 +116,12 @@ pub struct NextMaterial(pub Option<Handle<StandardMaterial>>);
 
 #[derive(Component, PartialEq, Eq, Hash)]
 pub enum DestructionLevel {
-    Zero = 0,
-    One = 1,
-    Two = 2,
-    Three = 3,
-    Four = 4,
-    Five = 5
+    Zero,
+    One,
+    Two,
+    Three,
+    Four,
+    Five
 }
 
 #[derive(Bundle)]
@@ -189,6 +189,10 @@ pub fn render_bloc(
     cmds.entity(bloc_entity).push_children(&faces);
     *old_faces = BlocFaces(faces);
 }
+
+pub fn remove_bloc(
+
+) {}
 
 /// Bloc position relative to the chunk corner
 #[derive(Component, Debug, Clone, Copy)]
@@ -489,8 +493,11 @@ impl<G: Generator> Chunks<G> {
         let types = self.generator.generate(pos);
         let blocs = ChunkBlocs::new(pos, &types, cmds);
 
+        let mut cmd = cmds.spawn_empty();
+        cmd.push_children(&blocs.0);
         let chunk = Chunk::new_with_blocs(pos, blocs);
-        self.insert(pos, cmds.spawn(chunk).id());
+        cmd.insert(chunk);
+        self.insert(pos, cmd.id());
     }
     /// * Fill the neighbors of the edge blocs for each chunk
     /// * /!\ This assumes that the blocs are already spawned and that the chunks are neighbors
