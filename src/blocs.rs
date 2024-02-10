@@ -1,7 +1,5 @@
-use std::iter;
-
-use bevy::{prelude::*, utils::HashMap};
-use bevy_rapier3d::prelude::*;
+use bevy::{ecs::query::{QueryEntityError, ROQueryItem, ReadOnlyWorldQuery, WorldQuery}, prelude::*, utils::HashMap};
+use bevy_rapier3d::{parry::utils::Array2, prelude::*};
 use arr_macro::arr;
 
 pub const CHUNK_X: usize = 4; // Right
@@ -135,13 +133,28 @@ pub struct Bloc {
     collision_groups: CollisionGroups
 }
 
-pub fn render_bloc(
+pub enum BlocTypeQuery<'a, 'world, 'state, F: ReadOnlyWorldQuery> {
+    Simple(&'a Query<'world, 'state, &'state BlocType, F>),
+    Complex1(&'a Query<'world, 'state, (Entity,&'state mut Neighbors,&'state mut BlocType,&'state mut BlocFaces), F>),
+    Complex2(&'a Query<'world, 'state, (Entity,&'state Neighbors,&'state BlocType,&'state mut BlocFaces), F>)
+}
+impl<F:ReadOnlyWorldQuery> BlocTypeQuery<'_, '_, '_, F> {
+    pub fn get(&self, entity: Entity) -> Result<&BlocType, QueryEntityError> {
+        match self {
+            BlocTypeQuery::Simple(q) => q.get(entity),
+            BlocTypeQuery::Complex1(q) => q.get(entity).map(|e|{e.2}),
+            BlocTypeQuery::Complex2(q) => q.get(entity).map(|e|{e.2})
+        }
+    }
+}
+
+pub fn render_bloc<F: ReadOnlyWorldQuery>(
     bloc_entity: Entity,
     neighbors: &Neighbors,
     r#type: &BlocType,
     old_faces: &mut BlocFaces,
     asset_server: &Res<AssetServer>,
-    bloc_types_query: &Query<&BlocType>,
+    bloc_types_query: BlocTypeQuery<F>,
     meshes: &mut ResMut<'_, Assets<Mesh>>,
     materials: &mut ResMut<'_, Assets<StandardMaterial>>,
     cmds: &mut Commands
@@ -186,13 +199,55 @@ pub fn render_bloc(
     for f in old_faces.0.iter() {
         cmds.entity(*f).despawn()
     }
-    cmds.entity(bloc_entity).push_children(&faces);
+    cmds.entity(bloc_entity).despawn_descendants().push_children(&faces);
     *old_faces = BlocFaces(faces);
 }
 
 pub fn remove_bloc(
+    entity: Entity,
+    neighbors: &Neighbors,
+    blocs: &mut Query<(Entity,&mut Neighbors,&mut BlocType,&mut BlocFaces)>,
+    blocs_types_query: &Query<&BlocType>,
+    cmds: &mut Commands,
+    asset_server: &Res<AssetServer>,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+) {
+    if let Some(n) = &neighbors.up {
+        let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
+        n_neighbors.down = None;
+        render_bloc(n_bloc_entity, &mut n_neighbors, &n_type, &mut n_faces, &asset_server, BlocTypeQuery::Complex1(&*blocs), meshes, materials, cmds);
+    }
+    if let Some(n) = &neighbors.down {
+        let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
+        n_neighbors.up = None;
+        render_bloc(n_bloc_entity, &mut n_neighbors, &n_type, &mut n_faces, &asset_server, BlocTypeQuery::Complex1(&*blocs), meshes, materials, cmds);
+    }
+    if let Some(n) = &neighbors.left {
+        let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
+        n_neighbors.right = None;
+        render_bloc(n_bloc_entity, &mut n_neighbors, &n_type, &mut n_faces, &asset_server, BlocTypeQuery::Complex1(&*blocs), meshes, materials, cmds);
+    }
+    if let Some(n) = &neighbors.right {
+        let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
+        n_neighbors.left = None;
+        render_bloc(n_bloc_entity, &mut n_neighbors, &n_type, &mut n_faces, &asset_server, BlocTypeQuery::Complex1(&*blocs), meshes, materials, cmds);
+    }
+    if let Some(n) = &neighbors.front {
+        let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
+        n_neighbors.back = None;
+        render_bloc(n_bloc_entity, &mut n_neighbors, &n_type, &mut n_faces, &asset_server, BlocTypeQuery::Complex1(&*blocs), meshes, materials, cmds);
+    }
+    if let Some(n) = &neighbors.back {
+        let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
+        n_neighbors.front = None;
+        render_bloc(n_bloc_entity, &mut n_neighbors, &n_type, &mut n_faces, &asset_server, BlocTypeQuery::Complex1(&*blocs), meshes, materials, cmds);
+    }
 
-) {}
+    let (bloc_entity, mut neighbors, mut r#type, mut faces) = blocs.get_mut(entity).unwrap();
+    *r#type = BlocType::Air;
+    render_bloc(bloc_entity, &mut neighbors, &r#type, &mut faces, asset_server, BlocTypeQuery::Complex1(&*blocs), meshes, materials, cmds);
+}
 
 /// Bloc position relative to the chunk corner
 #[derive(Component, Debug, Clone, Copy)]
@@ -390,7 +445,7 @@ impl ChunkBlocs {
     pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(Entity,&Neighbors,&BlocType,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
         for bloc in self.0.iter() {
             let (bloc_entity, neighbors,r#type,mut faces) = blocs.get_mut(*bloc).expect("Cannot find bloc from chunk");
-            render_bloc(bloc_entity,  neighbors, r#type, &mut faces, asset_server, bloc_types_query, meshes, materials, cmds);
+            render_bloc(bloc_entity,  neighbors, r#type, &mut faces, asset_server, BlocTypeQuery::Complex2(&*blocs), meshes, materials, cmds);
         }
     }
 }
@@ -485,7 +540,7 @@ impl<G: Generator> Chunks<G> {
     pub fn get(&self, pos: ChunkPos) -> Option<&Entity> {
         self.inner.get(&pos)
     }
-    pub fn generate(&mut self, pos: ChunkPos, cmds: &mut Commands, chunks_query: &Query<(&ChunkPos, &ChunkBlocs)>, blocs_query: &mut Query<&mut Neighbors>) {
+    pub fn generate(&mut self, pos: ChunkPos, cmds: &mut Commands) {
         // return if there is already a chunk
         if let Some(_) = self.get(pos) {
             return
@@ -503,10 +558,6 @@ impl<G: Generator> Chunks<G> {
     /// * /!\ This assumes that the blocs are already spawned and that the chunks are neighbors
     /// * Errors if the chunks are not spawned
     pub fn link(&self, pos1: ChunkPos, pos2: ChunkPos, blocs1: &ChunkBlocs, blocs2: &ChunkBlocs, blocs_query: &mut Query<&mut Neighbors>) -> Result<(), ()> {
-        // let blocss = (
-        //     chunks_query.get(*self.get(pos1).unwrap()).expect("Cannot find chunk 1"),
-        //     chunks_query.get(*self.get(pos2).unwrap()).expect("Cannot find chunk 2")
-        // );
         let x_iter = if pos1.x < pos2.x {
             (CHUNK_X as u8-1..=CHUNK_X as u8-1).into_iter().zip(0..=0)
         } else if pos1.x > pos2.x {

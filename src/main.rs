@@ -13,9 +13,7 @@ struct Render;
 
 fn setup<G: Generator>(
     mut cmds: Commands,
-    mut chunks: ResMut<Chunks<G>>,
-    chunks_query: Query<(&ChunkPos, &ChunkBlocs)>,
-    mut blocs_query: Query<&mut Neighbors>
+    mut chunks: ResMut<Chunks<G>>
 ) {
     // player
     Player::spawn(&mut cmds);
@@ -34,7 +32,7 @@ fn setup<G: Generator>(
 
     for x in -1..=1 {
         for z in -1..=1 {
-            chunks.generate(ChunkPos { x, y: 0, z }, &mut cmds, &chunks_query, &mut blocs_query);
+            chunks.generate(ChunkPos { x, y: 0, z }, &mut cmds);
         }
     }
 }
