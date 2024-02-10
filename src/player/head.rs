@@ -45,14 +45,14 @@ impl Default for Head {
     }
 }
 
-pub fn destroy_bloc(
+pub fn destroy_bloc<'a>(
     head: Query<&GlobalTransform, With<HeadMarker>>,
     rapier_ctx: Res<RapierContext>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
-    blocs_types_query: Query<&BlocType>,
-    mut blocs: Query<(Entity,&mut Neighbors,&mut BlocType,&mut BlocFaces)>,
+    mut blocs_types_query: Query<'_, '_, &'_ mut BlocType>,
+    mut blocs: Query<(Entity,&mut Neighbors,&mut BlocFaces)>,
     mut faces: Query<(&mut Handle<StandardMaterial>, &BaseMaterial, &mut NextMaterial, &mut DestructionLevel), With<FaceMarker>>,
     mut cmds: Commands,
     mut bloc_being_destroyed: Query<&mut BlocBeingDestroyed, With<HeadMarker>>,
@@ -119,7 +119,7 @@ pub fn destroy_bloc(
     if let Some(crack) = crack_lvl {
         let crack = images.get(cracks.0[crack].id()).unwrap();
         let bloc = blocs.get_mut(selected_bloc).unwrap();
-        for x in bloc.3.0.iter() {
+        for x in bloc.2.0.iter() {
             let (_, base_mat, mut next_mat, mut destruction_lvl) = faces.get_mut(*x).unwrap();
             let mut material = materials.get(base_mat.0.id()).unwrap().clone();
             let mut img = images.get(material.base_color_texture.unwrap().id()).unwrap().clone();
@@ -179,7 +179,7 @@ pub fn destroy_bloc(
         // let bloc_entity = blocs.get_mut(selected_bloc).unwrap().0;
 
         // cmds.entity(bloc_entity).despawn_recursive();
-        remove_bloc(selected_bloc, &neighbors, &mut blocs, &blocs_types_query, &mut cmds, &asset_server, &mut meshes, &mut materials);
+        remove_bloc(selected_bloc, &neighbors, &mut blocs, &mut blocs_types_query, &mut cmds, &asset_server, &mut meshes, &mut materials);
         bloc_being_destroyed.0 = None;
     } else {
         bloc_being_destroyed.0 = Some(bbd);

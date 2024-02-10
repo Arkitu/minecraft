@@ -124,7 +124,7 @@ pub enum DestructionLevel {
 
 #[derive(Bundle)]
 pub struct Bloc {
-    pos: Pos,
+    pos_in_chunk: PosInChunk,
     neighbors: Neighbors,
     r#type: BlocType,
     faces: BlocFaces,
@@ -133,15 +133,17 @@ pub struct Bloc {
     collision_groups: CollisionGroups
 }
 
-pub enum BlocTypeQuery<'a, 'world, 'state, F: ReadOnlyWorldQuery> {
-    Simple(&'a Query<'world, 'state, &'state BlocType, F>),
-    Complex1(&'a Query<'world, 'state, (Entity,&'state mut Neighbors,&'state mut BlocType,&'state mut BlocFaces), F>),
-    Complex2(&'a Query<'world, 'state, (Entity,&'state Neighbors,&'state BlocType,&'state mut BlocFaces), F>)
+pub enum BlocTypeQuery<'a, 'b, 'world, 'state, F: ReadOnlyWorldQuery> {
+    Simple(&'a Query<'world, 'state, &'b BlocType, F>),
+    Mut(&'a Query<'world, 'state, &'b mut BlocType, F>),
+    Complex1(&'a Query<'world, 'state, (Entity,&'b mut Neighbors,&'b mut BlocType,&'b mut BlocFaces), F>),
+    Complex2(&'a Query<'world, 'state, (Entity,&'b Neighbors,&'b BlocType,&'b mut BlocFaces), F>)
 }
-impl<F:ReadOnlyWorldQuery> BlocTypeQuery<'_, '_, '_, F> {
+impl<F:ReadOnlyWorldQuery> BlocTypeQuery<'_, '_, '_, '_, F> {
     pub fn get(&self, entity: Entity) -> Result<&BlocType, QueryEntityError> {
         match self {
             BlocTypeQuery::Simple(q) => q.get(entity),
+            BlocTypeQuery::Mut(q) => q.get(entity),
             BlocTypeQuery::Complex1(q) => q.get(entity).map(|e|{e.2}),
             BlocTypeQuery::Complex2(q) => q.get(entity).map(|e|{e.2})
         }
@@ -151,7 +153,6 @@ impl<F:ReadOnlyWorldQuery> BlocTypeQuery<'_, '_, '_, F> {
 pub fn render_bloc<F: ReadOnlyWorldQuery>(
     bloc_entity: Entity,
     neighbors: &Neighbors,
-    r#type: &BlocType,
     old_faces: &mut BlocFaces,
     asset_server: &Res<AssetServer>,
     bloc_types_query: BlocTypeQuery<F>,
@@ -159,6 +160,7 @@ pub fn render_bloc<F: ReadOnlyWorldQuery>(
     materials: &mut ResMut<'_, Assets<StandardMaterial>>,
     cmds: &mut Commands
 ) {
+    let r#type = bloc_types_query.get(bloc_entity).unwrap();
     if let BlocType::Air = r#type {
         return
     }
@@ -206,47 +208,47 @@ pub fn render_bloc<F: ReadOnlyWorldQuery>(
 pub fn remove_bloc(
     entity: Entity,
     neighbors: &Neighbors,
-    blocs: &mut Query<(Entity,&mut Neighbors,&mut BlocType,&mut BlocFaces)>,
-    blocs_types_query: &Query<&BlocType>,
+    blocs: &mut Query<(Entity,&mut Neighbors,&mut BlocFaces)>,
+    blocs_types_query: &mut Query<&mut BlocType>,
     cmds: &mut Commands,
     asset_server: &Res<AssetServer>,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
     if let Some(n) = &neighbors.up {
-        let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
+        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
         n_neighbors.down = None;
-        render_bloc(n_bloc_entity, &mut n_neighbors, &n_type, &mut n_faces, &asset_server, BlocTypeQuery::Complex1(&*blocs), meshes, materials, cmds);
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
     }
     if let Some(n) = &neighbors.down {
-        let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
+        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
         n_neighbors.up = None;
-        render_bloc(n_bloc_entity, &mut n_neighbors, &n_type, &mut n_faces, &asset_server, BlocTypeQuery::Complex1(&*blocs), meshes, materials, cmds);
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
     }
     if let Some(n) = &neighbors.left {
-        let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
+        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
         n_neighbors.right = None;
-        render_bloc(n_bloc_entity, &mut n_neighbors, &n_type, &mut n_faces, &asset_server, BlocTypeQuery::Complex1(&*blocs), meshes, materials, cmds);
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
     }
     if let Some(n) = &neighbors.right {
-        let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
+        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
         n_neighbors.left = None;
-        render_bloc(n_bloc_entity, &mut n_neighbors, &n_type, &mut n_faces, &asset_server, BlocTypeQuery::Complex1(&*blocs), meshes, materials, cmds);
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
     }
     if let Some(n) = &neighbors.front {
-        let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
+        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
         n_neighbors.back = None;
-        render_bloc(n_bloc_entity, &mut n_neighbors, &n_type, &mut n_faces, &asset_server, BlocTypeQuery::Complex1(&*blocs), meshes, materials, cmds);
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
     }
     if let Some(n) = &neighbors.back {
-        let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
+        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
         n_neighbors.front = None;
-        render_bloc(n_bloc_entity, &mut n_neighbors, &n_type, &mut n_faces, &asset_server, BlocTypeQuery::Complex1(&*blocs), meshes, materials, cmds);
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
     }
 
-    let (bloc_entity, mut neighbors, mut r#type, mut faces) = blocs.get_mut(entity).unwrap();
-    *r#type = BlocType::Air;
-    render_bloc(bloc_entity, &mut neighbors, &r#type, &mut faces, asset_server, BlocTypeQuery::Complex1(&*blocs), meshes, materials, cmds);
+    let (bloc_entity, mut neighbors, mut faces) = blocs.get_mut(entity).unwrap();
+    *blocs_types_query.get_mut(entity).unwrap() = BlocType::Air;
+    render_bloc(bloc_entity, &mut neighbors, &mut faces, asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
 }
 
 /// Bloc position relative to the chunk corner
@@ -255,6 +257,15 @@ pub struct PosInChunk {
     pub x: u8,
     pub y: u8,
     pub z: u8
+}
+impl Into<Transform> for PosInChunk {
+    fn into(self) -> Transform {
+        Transform::from_xyz(
+            self.x as f32 * SQUARE_UNIT,
+            self.y as f32 * SQUARE_UNIT,
+            self.z as f32 * SQUARE_UNIT
+        )
+    }
 }
 
 impl PosInChunk {
@@ -292,6 +303,11 @@ impl Into<Pos> for ChunkPos {
             y: self.y as i32 * CHUNK_Y as i32,
             z: self.z as i32 * CHUNK_Z as i32
         }
+    }
+}
+impl Into<Transform> for ChunkPos {
+    fn into(self) -> Transform {
+        Into::<Pos>::into(self).into()
     }
 }
 
@@ -379,13 +395,9 @@ impl ChunkBlocs {
                         z
                     };
                     let chunk_index = pos_in_chunk.to_chunk_index();
-                    let mut pos: Pos = chunk_pos.into();
-                    pos.x += x as i32;
-                    pos.y += y as i32;
-                    pos.z += z as i32;
                     let bloc = Bloc {
-                        pos: pos.clone(),
-                        spatial: SpatialBundle::from_transform(pos.into()),
+                        pos_in_chunk: pos_in_chunk.clone(),
+                        spatial: SpatialBundle::from_transform(pos_in_chunk.into()),
                         rigid_body: RigidBody::Fixed,
                         neighbors: Neighbors {
                             up: if y == (CHUNK_Y-1) as u8 {
@@ -442,10 +454,10 @@ impl ChunkBlocs {
     pub fn set(&mut self, pos:&PosInChunk, val: Entity) {
         self.0[pos.to_chunk_index()] = val;
     }
-    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(Entity,&Neighbors,&BlocType,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
+    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(Entity,&Neighbors,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
         for bloc in self.0.iter() {
-            let (bloc_entity, neighbors,r#type,mut faces) = blocs.get_mut(*bloc).expect("Cannot find bloc from chunk");
-            render_bloc(bloc_entity,  neighbors, r#type, &mut faces, asset_server, BlocTypeQuery::Complex2(&*blocs), meshes, materials, cmds);
+            let (bloc_entity, neighbors,mut faces) = blocs.get_mut(*bloc).expect("Cannot find bloc from chunk");
+            render_bloc(bloc_entity,  neighbors, &mut faces, asset_server, BlocTypeQuery::Simple(bloc_types_query), meshes, materials, cmds);
         }
     }
 }
@@ -468,6 +480,7 @@ impl Default for ChunkNeighborsAreLinked {
 
 #[derive(Bundle)]
 pub struct Chunk {
+    spatial: SpatialBundle,
     blocs: ChunkBlocs,
     pos: ChunkPos,
     neighbors_are_linked: ChunkNeighborsAreLinked
@@ -475,6 +488,7 @@ pub struct Chunk {
 impl Chunk {
     pub fn new_empty(pos: ChunkPos, cmds: &mut Commands) -> Self {
         Self {
+            spatial: SpatialBundle::from_transform(pos.into()),
             pos,
             blocs: ChunkBlocs::new_empty(pos, cmds),
             neighbors_are_linked: ChunkNeighborsAreLinked::default()
@@ -482,6 +496,7 @@ impl Chunk {
     }
     pub fn new_with_blocs(pos: ChunkPos, blocs: ChunkBlocs) -> Self {
         Self {
+            spatial: SpatialBundle::from_transform(pos.into()),
             pos,
             blocs,
             neighbors_are_linked: ChunkNeighborsAreLinked::default()
@@ -490,7 +505,7 @@ impl Chunk {
     pub fn get(&self, pos:&PosInChunk) -> Option<&Entity> {
         self.blocs.get(pos)
     }
-    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(Entity,&Neighbors,&BlocType,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
+    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(Entity,&Neighbors,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
         self.blocs.render(asset_server, blocs, bloc_types_query, meshes, materials, cmds);
     }
 }

@@ -45,7 +45,7 @@ fn render_all(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
     blocs_types_query: Query<&BlocType>,
-    mut blocs_query: Query<(Entity, &Neighbors, &BlocType, &mut BlocFaces)>
+    mut blocs_query: Query<(Entity, &Neighbors, &mut BlocFaces)>
 ) {
     let mut skip = true;
     for e in ev_app_lifetime.read() {
