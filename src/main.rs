@@ -9,11 +9,13 @@ pub mod game_state;
 use game_state::*;
 
 #[derive(Event)]
-struct Render;
+pub struct Render;
 
 fn setup<G: Generator>(
     mut cmds: Commands,
-    mut chunks: ResMut<Chunks<G>>
+    mut chunks: ResMut<Chunks<G>>,
+    mut game_state: ResMut<GameState>,
+    mut ev_render: EventWriter<Render>
 ) {
     // player
     Player::spawn(&mut cmds);
@@ -32,13 +34,16 @@ fn setup<G: Generator>(
 
     for x in -1..=1 {
         for z in -1..=1 {
-            chunks.generate(ChunkPos { x, y: 0, z }, &mut cmds);
+            chunks.generate(ChunkPos { x, y: 0, z }, &mut game_state, &mut cmds);
         }
     }
+
+    ev_render.send(Render);
 }
 
 fn render_all(
-    mut ev_app_lifetime: EventReader<ApplicationLifetime>,
+    //mut ev_app_lifetime: EventReader<ApplicationLifetime>,
+    mut ev_render: EventReader<Render>,
     mut chunks_query: Query<&ChunkBlocs>,
     mut cmds: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -47,19 +52,17 @@ fn render_all(
     blocs_types_query: Query<&BlocType>,
     mut blocs_query: Query<(Entity, &Neighbors, &mut BlocFaces)>
 ) {
-    let mut skip = true;
-    for e in ev_app_lifetime.read() {
-        if let ApplicationLifetime::Started = e {
-            skip = false;
-            break;
+    // for e in ev_app_lifetime.read() {
+    //     if let ApplicationLifetime::Started = e {
+    //         skip = false;
+    //         break;
+    //     }
+    // }
+    if ev_render.read().count() > 0 {
+        dbg!("render");
+        for blocs in chunks_query.iter_mut() {
+            blocs.render(&asset_server, &mut blocs_query, &blocs_types_query, &mut meshes, &mut materials, &mut cmds);
         }
-    }
-    if skip {
-        return
-    }
-    dbg!("render");
-    for blocs in chunks_query.iter_mut() {
-        blocs.render(&asset_server, &mut blocs_query, &blocs_types_query, &mut meshes, &mut materials, &mut cmds);
     }
 }
 
@@ -71,8 +74,9 @@ fn main() {
         .add_plugins(RapierDebugRenderPlugin::default())
         .add_plugins(PlayerPlugin)
         .add_plugins(BlocAndChunkPlugin)
+        .add_plugins(GameStatePlugin)
         .add_systems(Startup, setup::<DefaultGenerator>)
-        .add_systems(Update, render_all)
+        .add_systems(PreUpdate, render_all)
         .add_event::<Render>()
         .insert_resource(Chunks::<DefaultGenerator>::new());
 

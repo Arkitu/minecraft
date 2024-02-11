@@ -12,6 +12,9 @@ pub type DefaultGenerator = FlatWordGenerator;
 
 pub mod cracks;
 pub use cracks::*;
+use serde::{Deserialize, Serialize};
+
+use crate::{ChunkTypes, GameState};
 
 pub struct BlocAndChunkPlugin;
 impl Plugin for BlocAndChunkPlugin {
@@ -22,7 +25,7 @@ impl Plugin for BlocAndChunkPlugin {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum BlocType {
     Dirt,
     Grass,
@@ -208,6 +211,9 @@ pub fn remove_bloc(
     neighbors: &Neighbors,
     blocs: &mut Query<(Entity,&mut Neighbors,&mut BlocFaces)>,
     blocs_types_query: &mut Query<&mut BlocType>,
+    blocs_pos_parent_query: &Query<(&PosInChunk, &Parent), With<BlocType>>,
+    chunk_pos_query: &Query<&ChunkPos>,
+    game_state: &mut ResMut<GameState>,
     cmds: &mut Commands,
     asset_server: &Res<AssetServer>,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -248,6 +254,10 @@ pub fn remove_bloc(
     *blocs_types_query.get_mut(entity).unwrap() = BlocType::Air;
     cmds.entity(entity).remove::<Collider>();
     render_bloc(bloc_entity, &mut neighbors, &mut faces, asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
+
+    let (pos, parent) = blocs_pos_parent_query.get(entity).unwrap();
+    let chunk_pos = chunk_pos_query.get(parent.get()).unwrap();
+    game_state.chunks.get_mut(chunk_pos).unwrap().0[pos.to_chunk_index()] = BlocType::Air;
 }
 
 /// Bloc position relative to the chunk corner
@@ -289,7 +299,7 @@ impl PosInChunk {
 }
 
 /// Chunk position in chunk unit
-#[derive(Component, Eq, Hash, PartialEq, Clone, Copy)]
+#[derive(Component, Eq, Hash, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub struct ChunkPos {
     pub x: i16,
     pub y: i16,
@@ -538,8 +548,8 @@ impl Generator for FlatWordGenerator {
 
 #[derive(Resource)]
 pub struct Chunks<G: Generator> {
-    inner: HashMap<ChunkPos, Entity>,
-    generator: G
+    pub inner: HashMap<ChunkPos, Entity>,
+    pub generator: G
 }
 impl<G: Generator> Chunks<G> {
     pub fn new() -> Self {
@@ -554,12 +564,33 @@ impl<G: Generator> Chunks<G> {
     pub fn get(&self, pos: ChunkPos) -> Option<&Entity> {
         self.inner.get(&pos)
     }
-    pub fn generate(&mut self, pos: ChunkPos, cmds: &mut Commands) {
+    pub fn clear(&mut self, cmds: &mut Commands) {
+        for (_, entity) in self.inner.iter() {
+            cmds.entity(*entity).despawn_recursive();
+        }
+        self.inner.clear()
+    }
+    /// Panics if game_state doesn't contain the chunk bloc types
+    pub fn load(&mut self, pos: ChunkPos, game_state: &GameState, cmds: &mut Commands) {
+        if let Some(_) = self.get(pos) {
+            return
+        }
+        let types = game_state.chunks.get(&pos).unwrap();
+        let blocs = ChunkBlocs::new(pos, &types.0, cmds);
+
+        let mut cmd = cmds.spawn_empty();
+        cmd.push_children(&blocs.0);
+        let chunk = Chunk::new_with_blocs(pos, blocs);
+        cmd.insert(chunk);
+        self.insert(pos, cmd.id());
+    }
+    pub fn generate(&mut self, pos: ChunkPos, game_state: &mut GameState, cmds: &mut Commands) {
         // return if there is already a chunk
         if let Some(_) = self.get(pos) {
             return
         }
         let types = self.generator.generate(pos);
+        game_state.chunks.insert(pos, ChunkTypes(types));
         let blocs = ChunkBlocs::new(pos, &types, cmds);
 
         let mut cmd = cmds.spawn_empty();
@@ -568,10 +599,64 @@ impl<G: Generator> Chunks<G> {
         cmd.insert(chunk);
         self.insert(pos, cmd.id());
     }
+    pub fn unload(&mut self, pos: ChunkPos, chunks_query: &Query<(&ChunkBlocs, &ChunkNeighborsAreLinked)>, blocs_query: &mut Query<&mut Neighbors>, cmds: &mut Commands) {
+        let entity = *self.get(pos).unwrap();
+        let (blocs, nal) = chunks_query.get(entity).unwrap();
+        // up
+        if nal.up {
+            let mut pos2 = pos;
+            pos2.y += 1;
+            let entity2 = *self.get(pos2).unwrap();
+            let blocs2 = chunks_query.get(entity2).unwrap().0;
+            self.unlink(pos, pos2, blocs, blocs2, blocs_query);
+        }
+        // right
+        if nal.right {
+            let mut pos2 = pos;
+            pos2.x += 1;
+            let entity2 = *self.get(pos2).unwrap();
+            let blocs2 = chunks_query.get(entity2).unwrap().0;
+            self.unlink(pos, pos2, blocs, blocs2, blocs_query);
+        }
+        // front
+        if nal.front {
+            let mut pos2 = pos;
+            pos2.z += 1;
+            let entity2 = *self.get(pos2).unwrap();
+            let blocs2 = chunks_query.get(entity2).unwrap().0;
+            self.unlink(pos, pos2, blocs, blocs2, blocs_query);
+        }
+        // down
+        let mut pos2 = pos;
+        pos2.y -= 1;
+        let entity2 = *self.get(pos2).unwrap();
+        let (blocs2, nal2) = chunks_query.get(entity2).unwrap();
+        if nal2.up {
+            self.unlink(pos, pos2, blocs, blocs2, blocs_query);
+        }
+        // left
+        let mut pos2 = pos;
+        pos2.x -= 1;
+        let entity2 = *self.get(pos2).unwrap();
+        let (blocs2, nal2) = chunks_query.get(entity2).unwrap();
+        if nal2.right {
+            self.unlink(pos, pos2, blocs, blocs2, blocs_query);
+        }
+        // back
+        let mut pos2 = pos;
+        pos2.z -= 1;
+        let entity2 = *self.get(pos2).unwrap();
+        let (blocs2, nal2) = chunks_query.get(entity2).unwrap();
+        if nal2.front {
+            self.unlink(pos, pos2, blocs, blocs2, blocs_query);
+        }
+
+        cmds.entity(entity).despawn_recursive();
+    }
     /// * Fill the neighbors of the edge blocs for each chunk
     /// * /!\ This assumes that the blocs are already spawned and that the chunks are neighbors
     /// * Errors if the chunks are not spawned
-    pub fn link(&self, pos1: ChunkPos, pos2: ChunkPos, blocs1: &ChunkBlocs, blocs2: &ChunkBlocs, blocs_query: &mut Query<&mut Neighbors>) -> Result<(), ()> {
+    pub fn link(&self, pos1: ChunkPos, pos2: ChunkPos, blocs1: &ChunkBlocs, blocs2: &ChunkBlocs, blocs_query: &mut Query<&mut Neighbors>) {
         let x_iter = if pos1.x < pos2.x {
             (CHUNK_X as u8-1..=CHUNK_X as u8-1).into_iter().zip(0..=0)
         } else if pos1.x > pos2.x {
@@ -600,7 +685,7 @@ impl<G: Generator> Chunks<G> {
                         *blocs1.get(&PosInChunk { x: x.0, y: y.0, z: z.0 }).expect("Cannot find bloc 1"),
                         *blocs2.get(&PosInChunk { x: x.1, y: y.1, z: z.1 }).expect("Cannot find bloc 2")
                     );
-                    let mut neighbors = blocs_query.get_many_mut([blocs.0, blocs.1]).expect("Cannot find neighbors 1");
+                    let mut neighbors = blocs_query.get_many_mut([blocs.0, blocs.1]).expect("Cannot find neighbors");
                     if pos1.x < pos2.x {
                         neighbors[0].right = Some(blocs.1);
                         neighbors[1].left = Some(blocs.0);
@@ -623,7 +708,59 @@ impl<G: Generator> Chunks<G> {
                 }
             }
         }
-        Ok(())
+    }
+    pub fn unlink(&self, pos1: ChunkPos, pos2: ChunkPos, blocs1: &ChunkBlocs, blocs2: &ChunkBlocs, blocs_query: &mut Query<&mut Neighbors>) {
+        let x_iter = if pos1.x < pos2.x {
+            (CHUNK_X as u8-1..=CHUNK_X as u8-1).into_iter().zip(0..=0)
+        } else if pos1.x > pos2.x {
+            (0..=0).into_iter().zip(CHUNK_X as u8-1..=CHUNK_X as u8-1)
+        } else {
+            (0..=CHUNK_X as u8-1).into_iter().zip(0..=CHUNK_X as u8-1)
+        };
+        let y_iter = if pos1.y < pos2.y {
+            (CHUNK_Y as u8-1..=CHUNK_Y as u8-1).into_iter().zip(0..=0)
+        } else if pos1.y > pos2.y {
+            (0..=0).into_iter().zip(CHUNK_Y as u8-1..=CHUNK_Y as u8-1)
+        } else {
+            (0..=CHUNK_Y as u8-1).into_iter().zip(0..=CHUNK_Y as u8-1)
+        };
+        let z_iter = if pos1.z < pos2.z {
+            (CHUNK_Z as u8-1..=CHUNK_Z as u8-1).into_iter().zip(0..=0)
+        } else if pos1.z > pos2.z {
+            (0..=0).into_iter().zip(CHUNK_Z as u8-1..=CHUNK_Z as u8-1)
+        } else {
+            (0..=CHUNK_Z as u8-1).into_iter().zip(0..=CHUNK_Z as u8-1)
+        };
+        for x in x_iter {
+            for y in y_iter.clone() {
+                for z in z_iter.clone() {
+                    let blocs = (
+                        *blocs1.get(&PosInChunk { x: x.0, y: y.0, z: z.0 }).expect("Cannot find bloc 1"),
+                        *blocs2.get(&PosInChunk { x: x.1, y: y.1, z: z.1 }).expect("Cannot find bloc 2")
+                    );
+                    let mut neighbors = blocs_query.get_many_mut([blocs.0, blocs.1]).expect("Cannot find neighbors");
+                    if pos1.x < pos2.x {
+                        neighbors[0].right = None;
+                        neighbors[1].left = None
+                    } else if pos1.x > pos2.x {
+                        neighbors[0].left = None;
+                        neighbors[1].right = None;
+                    } else if pos1.y < pos2.y {
+                        neighbors[0].up = None;
+                        neighbors[1].down = None;
+                    } else if pos1.y > pos2.y {
+                        neighbors[0].down = None;
+                        neighbors[1].up = None;
+                    } else if pos1.z < pos2.z {
+                        neighbors[0].front = None;
+                        neighbors[1].back = None;
+                    } else if pos1.z > pos2.z {
+                        neighbors[0].back = None;
+                        neighbors[1].front = None;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -681,13 +818,12 @@ pub fn link_chunks<G: Generator>(
                     None => continue
                 }
             ).unwrap();
-            if let Ok(_) = chunks.link(*pos1, *pos2, blocs1, blocs2, &mut blocs_query) {
-                match val_to_change {
-                    0 => nal.up = true,
-                    1 => nal.right = true,
-                    2 => nal.front = true,
-                    _ => {}
-                }
+            chunks.link(*pos1, *pos2, blocs1, blocs2, &mut blocs_query);
+            match val_to_change {
+                0 => nal.up = true,
+                1 => nal.right = true,
+                2 => nal.front = true,
+                _ => {}
             }
         }
     }

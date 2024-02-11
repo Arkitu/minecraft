@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
-use crate::{remove_bloc, BaseMaterial, BlocFaces, BlocType, Cracks, DestructionLevel, FaceMarker, Neighbors, NextMaterial};
+use crate::{remove_bloc, BaseMaterial, BlocFaces, BlocType, ChunkPos, Cracks, DestructionLevel, FaceMarker, GameState, Neighbors, NextMaterial, PosInChunk};
 
 pub mod camera;
 pub use camera::*;
@@ -44,14 +44,18 @@ impl Default for Head {
     }
 }
 
-pub fn destroy_bloc<'a>(
+pub fn destroy_bloc(
     head: Query<&GlobalTransform, With<HeadMarker>>,
     rapier_ctx: Res<RapierContext>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
-    mut blocs_types_query: Query<'_, '_, &'_ mut BlocType>,
-    mut blocs: Query<(Entity,&mut Neighbors,&mut BlocFaces)>,
+    blocs: (Query<'_, '_, &'_ mut BlocType>, Query<(Entity,&mut Neighbors,&mut BlocFaces)>, Query<(&PosInChunk, &Parent), With<BlocType>>, Query<&ChunkPos>),
+    // mut blocs_types_query: Query<'_, '_, &'_ mut BlocType>,
+    // mut blocs: Query<(Entity,&mut Neighbors,&mut BlocFaces)>,
+    // blocs_pos_parent_query: Query<(&PosInChunk, &Parent), With<BlocType>>,
+    // chunk_pos_query: Query<&ChunkPos>,
+    mut game_state: ResMut<GameState>,
     mut faces: Query<(&mut Handle<StandardMaterial>, &BaseMaterial, &mut NextMaterial, &mut DestructionLevel), With<FaceMarker>>,
     mut cmds: Commands,
     mut bloc_being_destroyed: Query<&mut BlocBeingDestroyed, With<HeadMarker>>,
@@ -73,6 +77,8 @@ pub fn destroy_bloc<'a>(
         bloc_being_destroyed.single_mut().0 = None;
         return;
     }
+
+    let (mut blocs_types_query, mut blocs, blocs_pos_parent_query, chunk_pos_query) = blocs;
 
     let global_pos = head.single();
     let (selected_bloc, distance) = match rapier_ctx.cast_ray(
@@ -178,7 +184,7 @@ pub fn destroy_bloc<'a>(
         // let bloc_entity = blocs.get_mut(selected_bloc).unwrap().0;
 
         // cmds.entity(bloc_entity).despawn_recursive();
-        remove_bloc(selected_bloc, &neighbors, &mut blocs, &mut blocs_types_query, &mut cmds, &asset_server, &mut meshes, &mut materials);
+        remove_bloc(selected_bloc, &neighbors, &mut blocs, &mut blocs_types_query, &blocs_pos_parent_query, &chunk_pos_query, &mut game_state, &mut cmds, &asset_server, &mut meshes, &mut materials);
         bloc_being_destroyed.0 = None;
     } else {
         bloc_being_destroyed.0 = Some(bbd);
