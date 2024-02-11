@@ -1,5 +1,5 @@
-use bevy::{ecs::query::{QueryEntityError, ROQueryItem, ReadOnlyWorldQuery, WorldQuery}, prelude::*, utils::HashMap};
-use bevy_rapier3d::{parry::utils::Array2, prelude::*};
+use bevy::{ecs::query::{QueryEntityError, ReadOnlyWorldQuery}, prelude::*, utils::HashMap};
+use bevy_rapier3d::prelude::*;
 use arr_macro::arr;
 
 pub const CHUNK_X: usize = 4; // Right
@@ -161,6 +161,7 @@ pub fn render_bloc<F: ReadOnlyWorldQuery>(
     cmds: &mut Commands
 ) {
     let r#type = bloc_types_query.get(bloc_entity).unwrap();
+    cmds.entity(bloc_entity).despawn_descendants();
     if let BlocType::Air = r#type {
         return
     }
@@ -198,10 +199,7 @@ pub fn render_bloc<F: ReadOnlyWorldQuery>(
         }, FaceMarker, DestructionLevel::Zero, BaseMaterial(material_handle), NextMaterial(None))).id();
         faces.push(id);
     }
-    for f in old_faces.0.iter() {
-        cmds.entity(*f).despawn()
-    }
-    cmds.entity(bloc_entity).despawn_descendants().push_children(&faces);
+    cmds.entity(bloc_entity).push_children(&faces);
     *old_faces = BlocFaces(faces);
 }
 
@@ -248,6 +246,7 @@ pub fn remove_bloc(
 
     let (bloc_entity, mut neighbors, mut faces) = blocs.get_mut(entity).unwrap();
     *blocs_types_query.get_mut(entity).unwrap() = BlocType::Air;
+    cmds.entity(entity).remove::<Collider>();
     render_bloc(bloc_entity, &mut neighbors, &mut faces, asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
 }
 

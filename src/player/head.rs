@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
-use crate::{remove_bloc, render_bloc, BaseMaterial, BlocFaces, BlocType, Cracks, DestructionLevel, FaceMarker, Neighbors, NextMaterial};
-use image;
+use crate::{remove_bloc, BaseMaterial, BlocFaces, BlocType, Cracks, DestructionLevel, FaceMarker, Neighbors, NextMaterial};
 
 pub mod camera;
 pub use camera::*;
