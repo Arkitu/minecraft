@@ -16,8 +16,10 @@ serde = "1.0.196"
 bincode = "1.3.3"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3.67", features = [ "Window", "Element", "Document", "HtmlElement" ] }
+web-sys = { version = "0.3.67", features = [ "Window", "Element", "Document", "HtmlElement", "Storage" ] }
 gloo = "0.11.0"
+web-time = "1.0.0"
+base64 = "0.21.7"
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]

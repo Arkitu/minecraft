@@ -1,9 +1,14 @@
-use std::{borrow::Borrow, fs, path::Path, time::{SystemTime, UNIX_EPOCH}};
-
+use std::{borrow::Borrow, fs, path::Path};
 use bevy::{prelude::*, utils::HashMap};
 use bevy_rapier3d::dynamics::Velocity;
 use crate::{BlocType, ChunkBlocs, ChunkNeighborsAreLinked, ChunkPos, Chunks, DefaultGenerator, Neighbors, PlayerMarker, Render, CHUNK_X, CHUNK_Y, CHUNK_Z};
 use serde::{Serialize, Deserialize};
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(target_arch = "wasm32")]
+use web_time::{SystemTime, UNIX_EPOCH};
 
 pub struct GameStatePlugin;
 impl Plugin for GameStatePlugin {
@@ -66,11 +71,22 @@ pub fn save(
         player_angvel: vel.angvel
     };
 
-    if !Path::new("saves").exists() {
-        fs::create_dir("saves").unwrap();
+    let path = format!("saves/{:?}.save", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis());
+    let serialized = bincode::serialize(&save).unwrap();
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if !Path::new("saves").exists() {
+            fs::create_dir("saves").unwrap();
+        }
+
+        fs::write(path, serialized).unwrap();
     }
 
-    fs::write(format!("saves/{:?}.save", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis()), bincode::serialize(&save).unwrap()).unwrap();
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        web_sys::window().unwrap().local_storage().unwrap().unwrap().set_item(&path, &String::from_utf8_unchecked(serialized)).unwrap();
+    }
 }
 
 pub fn load(
@@ -85,6 +101,7 @@ pub fn load(
         return
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     let content = match fs::read_dir("saves") {
         Err(e) => {
             warn!("Cannot read saves : {}", e);
@@ -121,6 +138,38 @@ pub fn load(
                 }
             }
         }
+    };
+
+    #[cfg(target_arch = "wasm32")]
+    let content = {
+        let ls = web_sys::window().unwrap().local_storage().unwrap().unwrap();
+        let mut key = None;
+        for i in 0..ls.length().unwrap() {
+            let k = ls.key(i).unwrap().unwrap();
+            if k.starts_with("saves/") && k.ends_with(".save") {
+                let k = match k.trim_start_matches("saves/").trim_end_matches(".save").parse::<u128>() {
+                    Err(_) => continue,
+                    Ok(k) => k
+                };
+
+                match key {
+                    None => key = Some(k),
+                    Some(k1) => key = Some(k1.max(k))
+                }
+            }
+        }
+        let key = match key {
+            None => {
+                warn!("No save found");
+                return
+            },
+            Some(k) => k
+        };
+        let a = ls.get_item(&format!("saves/{}.save", key)).unwrap().unwrap();
+        info!("{}", a);
+        let bytes = a.into_bytes();
+        info!("{:?}", bytes);
+        bytes
     };
 
     let game_save: GameSave = match bincode::deserialize(&content) {
