@@ -261,7 +261,7 @@ pub fn remove_bloc(
 }
 
 /// Bloc position relative to the chunk corner
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PosInChunk {
     pub x: u8,
     pub y: u8,

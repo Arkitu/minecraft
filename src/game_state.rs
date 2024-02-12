@@ -1,7 +1,7 @@
 use std::{borrow::Borrow, fs, path::Path};
 use bevy::{prelude::*, utils::HashMap};
 use bevy_rapier3d::dynamics::Velocity;
-use crate::{BlocType, ChunkBlocs, ChunkNeighborsAreLinked, ChunkPos, Chunks, DefaultGenerator, Neighbors, PlayerMarker, Render, CHUNK_X, CHUNK_Y, CHUNK_Z};
+use crate::{BlocType, ChunkBlocs, ChunkNeighborsAreLinked, ChunkPos, Chunks, DefaultGenerator, Neighbors, PlayerMarker, PosInChunk, Render, CHUNK_X, CHUNK_Y, CHUNK_Z};
 use serde::{Serialize, Deserialize};
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -44,11 +44,14 @@ pub struct GameState {
     pub chunks: HashMap<ChunkPos, ChunkTypes>
 }
 
-
+#[derive(Serialize, Deserialize)]
+struct ChunkSave {
+    changes: HashMap<PosInChunk, BlocType>
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct GameSave {
-    pub chunks: HashMap<ChunkPos, ChunkTypes>,
+    pub chunks: HashMap<ChunkPos, ChunkSave>,
     pub player_pos: Transform,
     pub player_linvel: Vec3,
     pub player_angvel: Vec3
