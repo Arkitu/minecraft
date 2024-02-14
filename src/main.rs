@@ -15,6 +15,7 @@ fn setup<G: Generator>(
     mut cmds: Commands,
     mut chunks: ResMut<Chunks<G>>,
     mut game_state: ResMut<GameState>,
+    chunk_saves: Res<ChunkSaves>,
     mut ev_render: EventWriter<Render>
 ) {
     // player
@@ -34,7 +35,7 @@ fn setup<G: Generator>(
 
     for x in -1..=1 {
         for z in -1..=1 {
-            chunks.generate(ChunkPos { x, y: 0, z }, &mut game_state, &mut cmds);
+            chunks.generate(ChunkPos { x, y: 0, z }, &chunk_saves, &mut game_state, &mut cmds);
         }
     }
 

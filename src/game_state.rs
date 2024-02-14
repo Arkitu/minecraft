@@ -13,9 +13,8 @@ use web_time::{SystemTime, UNIX_EPOCH};
 pub struct GameStatePlugin;
 impl Plugin for GameStatePlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(GameState {
-            chunks: HashMap::new()
-        })
+        app.init_resource::<GameState>()
+            .init_resource::<ChunkSaves>()
             .add_systems(Update, save)
             .add_systems(Update, load);
     }
@@ -39,19 +38,22 @@ impl<'de> Deserialize<'de> for ChunkTypes {
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct GameState {
     pub chunks: HashMap<ChunkPos, ChunkTypes>
 }
 
-#[derive(Serialize, Deserialize)]
-struct ChunkSave {
-    changes: HashMap<PosInChunk, BlocType>
+#[derive(Resource, Serialize, Deserialize, Clone, Default)]
+pub struct ChunkSaves (pub HashMap<ChunkPos, ChunkSave>);
+
+#[derive(Serialize, Deserialize, Default, Clone)]
+pub struct ChunkSave {
+    pub changes: HashMap<PosInChunk, BlocType>
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct GameSave {
-    pub chunks: HashMap<ChunkPos, ChunkSave>,
+    pub chunks: ChunkSaves,
     pub player_pos: Transform,
     pub player_linvel: Vec3,
     pub player_angvel: Vec3
@@ -60,6 +62,7 @@ pub struct GameSave {
 pub fn save(
     keys: Res<Input<KeyCode>>,
     game_state: Res<GameState>,
+    chunk_saves: Res<ChunkSaves>,
     player: Query<(&Transform, &Velocity), With<PlayerMarker>>
 ) {
     if !keys.just_pressed(KeyCode::T) {
@@ -68,7 +71,7 @@ pub fn save(
 
     let (pos, vel) = player.single();
     let save = GameSave {
-        chunks: game_state.chunks.clone(),
+        chunks: chunk_saves.clone(),
         player_pos: *pos,
         player_linvel: vel.linvel,
         player_angvel: vel.angvel
@@ -96,6 +99,7 @@ pub fn load(
     keys: Res<Input<KeyCode>>,
     mut chunks: ResMut<Chunks<DefaultGenerator>>,
     mut game_state: ResMut<GameState>,
+    mut chunk_saves: ResMut<ChunkSaves>,
     mut player: Query<(&mut Transform, &mut Velocity), With<PlayerMarker>>,
     mut cmds: Commands,
     mut ev_render: EventWriter<Render>
@@ -183,16 +187,15 @@ pub fn load(
         Ok(gs) => gs
     };
 
-    game_state.chunks = game_save.chunks;
+    *chunk_saves = game_save.chunks;
 
     let old_loaded_chunks = chunks.inner.keys().map(|x|*x).clone().collect::<Vec<_>>();
 
     chunks.clear(&mut cmds);
+    game_state.chunks.clear();
 
     for pos in old_loaded_chunks {
-        if game_state.chunks.contains_key(&pos) {
-            chunks.load(pos, &game_state, &mut cmds);
-        }
+        chunks.load_or_generate(pos, &chunk_saves, &mut game_state, &mut cmds);
     }
 
     ev_render.send(Render);

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
-use crate::{remove_bloc, BaseMaterial, BlocFaces, BlocType, ChunkPos, Cracks, DestructionLevel, FaceMarker, GameState, Neighbors, NextMaterial, PosInChunk};
+use crate::{remove_bloc, BaseMaterial, BlocFaces, BlocType, ChunkSaves, ChunkPos, Cracks, DestructionLevel, FaceMarker, GameState, Neighbors, NextMaterial, PosInChunk};
 
 pub mod camera;
 pub use camera::*;
@@ -56,6 +56,7 @@ pub fn destroy_bloc(
     // blocs_pos_parent_query: Query<(&PosInChunk, &Parent), With<BlocType>>,
     // chunk_pos_query: Query<&ChunkPos>,
     mut game_state: ResMut<GameState>,
+    mut changes: ResMut<ChunkSaves>,
     mut faces: Query<(&mut Handle<StandardMaterial>, &BaseMaterial, &mut NextMaterial, &mut DestructionLevel), With<FaceMarker>>,
     mut cmds: Commands,
     mut bloc_being_destroyed: Query<&mut BlocBeingDestroyed, With<HeadMarker>>,
@@ -150,41 +151,7 @@ pub fn destroy_bloc(
 
     if bbd.1 >= 1.0 {
         let neighbors = blocs.get_mut(selected_bloc).unwrap().1.clone();
-        // if let Some(n) = &neighbors.up {
-        //     let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
-        //     n_neighbors.down = None;
-        //     render_bloc(n_bloc_entity, &mut n_neighbors, n_type, &mut n_faces, &asset_server, &blocs_types_query, &mut meshes, &mut materials, &mut cmds);
-        // }
-        // if let Some(n) = &neighbors.down {
-        //     let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
-        //     n_neighbors.up = None;
-        //     render_bloc(n_bloc_entity, &mut n_neighbors, n_type, &mut n_faces, &asset_server, &blocs_types_query, &mut meshes, &mut materials, &mut cmds);
-        // }
-        // if let Some(n) = &neighbors.left {
-        //     let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
-        //     n_neighbors.right = None;
-        //     render_bloc(n_bloc_entity, &mut n_neighbors, n_type, &mut n_faces, &asset_server, &blocs_types_query, &mut meshes, &mut materials, &mut cmds);
-        // }
-        // if let Some(n) = &neighbors.right {
-        //     let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
-        //     n_neighbors.left = None;
-        //     render_bloc(n_bloc_entity, &mut n_neighbors, n_type, &mut n_faces, &asset_server, &blocs_types_query, &mut meshes, &mut materials, &mut cmds);
-        // }
-        // if let Some(n) = &neighbors.front {
-        //     let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
-        //     n_neighbors.back = None;
-        //     render_bloc(n_bloc_entity, &mut n_neighbors, n_type, &mut n_faces, &asset_server, &blocs_types_query, &mut meshes, &mut materials, &mut cmds);
-        // }
-        // if let Some(n) = &neighbors.back {
-        //     let (n_bloc_entity, mut n_neighbors, n_type, mut n_faces) = blocs.get_mut(*n).unwrap();
-        //     n_neighbors.front = None;
-        //     render_bloc(n_bloc_entity, &mut n_neighbors, n_type, &mut n_faces, &asset_server, &blocs_types_query, &mut meshes, &mut materials, &mut cmds);
-        // }
-
-        // let bloc_entity = blocs.get_mut(selected_bloc).unwrap().0;
-
-        // cmds.entity(bloc_entity).despawn_recursive();
-        remove_bloc(selected_bloc, &neighbors, &mut blocs, &mut blocs_types_query, &blocs_pos_parent_query, &chunk_pos_query, &mut game_state, &mut cmds, &asset_server, &mut meshes, &mut materials);
+        remove_bloc(selected_bloc, &neighbors, &mut blocs, &mut blocs_types_query, &blocs_pos_parent_query, &chunk_pos_query, &mut game_state, &mut changes, &mut cmds, &asset_server, &mut meshes, &mut materials);
         bloc_being_destroyed.0 = None;
     } else {
         bloc_being_destroyed.0 = Some(bbd);

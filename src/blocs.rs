@@ -14,7 +14,7 @@ pub mod cracks;
 pub use cracks::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{ChunkTypes, GameState};
+use crate::{ChunkSave, ChunkSaves, ChunkTypes, GameState};
 
 pub struct BlocAndChunkPlugin;
 impl Plugin for BlocAndChunkPlugin {
@@ -214,6 +214,7 @@ pub fn remove_bloc(
     blocs_pos_parent_query: &Query<(&PosInChunk, &Parent), With<BlocType>>,
     chunk_pos_query: &Query<&ChunkPos>,
     game_state: &mut ResMut<GameState>,
+    chunk_saves: &mut ResMut<ChunkSaves>,
     cmds: &mut Commands,
     asset_server: &Res<AssetServer>,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -258,6 +259,17 @@ pub fn remove_bloc(
     let (pos, parent) = blocs_pos_parent_query.get(entity).unwrap();
     let chunk_pos = chunk_pos_query.get(parent.get()).unwrap();
     game_state.chunks.get_mut(chunk_pos).unwrap().0[pos.to_chunk_index()] = BlocType::Air;
+
+    match chunk_saves.0.get_mut(chunk_pos) {
+        Some(entry) => {
+            entry.changes.insert(*pos, BlocType::Air);
+        },
+        None => {
+            let mut entry = ChunkSave::default();
+            entry.changes.insert(*pos, BlocType::Air);
+            chunk_saves.0.insert(*chunk_pos, entry);
+        }
+    }
 }
 
 /// Bloc position relative to the chunk corner
@@ -299,7 +311,7 @@ impl PosInChunk {
 }
 
 /// Chunk position in chunk unit
-#[derive(Component, Eq, Hash, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Component, Eq, Hash, PartialEq, Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct ChunkPos {
     pub x: i16,
     pub y: i16,
@@ -384,7 +396,7 @@ impl Direction {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct ChunkBlocs ([Entity; CHUNK_X*CHUNK_Y*CHUNK_Z]);
 
 impl ChunkBlocs {
@@ -570,27 +582,10 @@ impl<G: Generator> Chunks<G> {
         }
         self.inner.clear()
     }
-    /// Panics if game_state doesn't contain the chunk bloc types
-    pub fn load(&mut self, pos: ChunkPos, game_state: &GameState, cmds: &mut Commands) {
+    pub fn load_types(&mut self, pos: ChunkPos, types: &[BlocType; CHUNK_X*CHUNK_Y*CHUNK_Z], cmds: &mut Commands) {
         if let Some(_) = self.get(pos) {
             return
         }
-        let types = game_state.chunks.get(&pos).unwrap();
-        let blocs = ChunkBlocs::new(pos, &types.0, cmds);
-
-        let mut cmd = cmds.spawn_empty();
-        cmd.push_children(&blocs.0);
-        let chunk = Chunk::new_with_blocs(pos, blocs);
-        cmd.insert(chunk);
-        self.insert(pos, cmd.id());
-    }
-    pub fn generate(&mut self, pos: ChunkPos, game_state: &mut GameState, cmds: &mut Commands) {
-        // return if there is already a chunk
-        if let Some(_) = self.get(pos) {
-            return
-        }
-        let types = self.generator.generate(pos);
-        game_state.chunks.insert(pos, ChunkTypes(types));
         let blocs = ChunkBlocs::new(pos, &types, cmds);
 
         let mut cmd = cmds.spawn_empty();
@@ -598,6 +593,47 @@ impl<G: Generator> Chunks<G> {
         let chunk = Chunk::new_with_blocs(pos, blocs);
         cmd.insert(chunk);
         self.insert(pos, cmd.id());
+    }
+    /// Panics if game_state doesn't contain the chunk bloc types
+    pub fn load(&mut self, pos: ChunkPos, game_state: &GameState, cmds: &mut Commands) {
+        if let Some(_) = self.get(pos) {
+            return
+        }
+        let types = game_state.chunks.get(&pos).unwrap().0;
+        self.load_types(pos, &types, cmds);
+    }
+    pub fn generate(&mut self, pos: ChunkPos, chunk_saves: &ChunkSaves, game_state: &mut GameState, cmds: &mut Commands) {
+        // return if there is already a chunk
+        if let Some(_) = self.get(pos) {
+            return
+        }
+        let mut types = self.generator.generate(pos);
+        if let Some(save) = chunk_saves.0.get(&pos) {
+            for (pos, r#type) in save.changes.iter() {
+                types[pos.to_chunk_index()] = *r#type;
+            }
+        }
+        game_state.chunks.insert(pos, ChunkTypes(types));
+        self.load_types(pos, &types, cmds);
+    }
+    pub fn load_or_generate(&mut self, pos: ChunkPos, chunk_saves: &ChunkSaves, game_state: &mut GameState, cmds: &mut Commands) {
+        if let Some(_) = self.get(pos) {
+            return
+        }
+        let types = match game_state.chunks.get(&pos) {
+            Some(types) => types.0,
+            None => {
+                let mut types = self.generator.generate(pos);
+                if let Some(save) = chunk_saves.0.get(&pos) {
+                    for (pos, r#type) in save.changes.iter() {
+                        types[pos.to_chunk_index()] = *r#type;
+                    }
+                }
+                game_state.chunks.insert(pos, ChunkTypes(types));
+                types
+            }
+        };
+        self.load_types(pos, &types, cmds);
     }
     pub fn unload(&mut self, pos: ChunkPos, chunks_query: &Query<(&ChunkBlocs, &ChunkNeighborsAreLinked)>, blocs_query: &mut Query<&mut Neighbors>, cmds: &mut Commands) {
         let entity = *self.get(pos).unwrap();
