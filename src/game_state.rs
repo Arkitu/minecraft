@@ -9,6 +9,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(target_arch = "wasm32")]
 use web_time::{SystemTime, UNIX_EPOCH};
+#[cfg(target_arch = "wasm32")]
+use base64::prelude::*;
 
 pub struct GameStatePlugin;
 impl Plugin for GameStatePlugin {
@@ -91,7 +93,7 @@ pub fn save(
 
     #[cfg(target_arch = "wasm32")]
     unsafe {
-        web_sys::window().unwrap().local_storage().unwrap().unwrap().set_item(&path, &String::from_utf8_unchecked(serialized)).unwrap();
+        web_sys::window().unwrap().local_storage().unwrap().unwrap().set_item(&path, &BASE64_STANDARD.encode(&serialized)).unwrap();
     }
 }
 
@@ -172,10 +174,14 @@ pub fn load(
             },
             Some(k) => k
         };
-        let a = ls.get_item(&format!("saves/{}.save", key)).unwrap().unwrap();
-        info!("{}", a);
-        let bytes = a.into_bytes();
-        info!("{:?}", bytes);
+        let string = ls.get_item(&format!("saves/{}.save", key)).unwrap().unwrap();
+        let bytes = match BASE64_STANDARD.decode(string) {
+            Ok(b) => b,
+            Err(e) => {
+                warn!("Invalid save (base64 error) : {}", e);
+                return
+            }
+        };
         bytes
     };
 
