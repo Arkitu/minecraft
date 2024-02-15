@@ -12,6 +12,9 @@ pub type DefaultGenerator = FlatWordGenerator;
 
 pub mod cracks;
 pub use cracks::*;
+pub mod loading;
+pub use loading::*;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{ChunkSave, ChunkSaves, ChunkTypes, GameState};
@@ -20,6 +23,7 @@ pub struct BlocAndChunkPlugin;
 impl Plugin for BlocAndChunkPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(CracksPlugin)
+            .add_plugins(LoadingPlugin)
             .add_systems(Update, apply_next_material)
             .add_systems(Update, link_chunks::<DefaultGenerator>);
     }
@@ -313,9 +317,9 @@ impl PosInChunk {
 /// Chunk position in chunk unit
 #[derive(Component, Eq, Hash, PartialEq, Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct ChunkPos {
-    pub x: i16,
-    pub y: i16,
-    pub z: i16
+    pub x: i32,
+    pub y: i32,
+    pub z: i32
 }
 impl Into<Pos> for ChunkPos {
     fn into(self) -> Pos {
