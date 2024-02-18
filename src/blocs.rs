@@ -1,10 +1,10 @@
-use bevy::{ecs::query::{QueryEntityError, ReadOnlyWorldQuery}, prelude::*, utils::HashMap};
+use bevy::{ecs::query::{QueryEntityError}, prelude::*, utils::HashMap};
 use bevy_rapier3d::prelude::*;
 use arr_macro::arr;
 
-pub const CHUNK_X: usize = 4; // Right
+pub const CHUNK_X: usize = 8; // Right
 pub const CHUNK_Y: usize = 8; // Up
-pub const CHUNK_Z: usize = 4; // Front
+pub const CHUNK_Z: usize = 8; // Front
 
 pub const SQUARE_UNIT: f32 = 1.0;
 
@@ -140,13 +140,13 @@ pub struct Bloc {
     collision_groups: CollisionGroups
 }
 
-pub enum BlocTypeQuery<'a, 'b, 'world, 'state, F: ReadOnlyWorldQuery> {
-    Simple(&'a Query<'world, 'state, &'b BlocType, F>),
-    Mut(&'a Query<'world, 'state, &'b mut BlocType, F>),
-    Complex1(&'a Query<'world, 'state, (Entity,&'b mut Neighbors,&'b mut BlocType,&'b mut BlocFaces), F>),
-    Complex2(&'a Query<'world, 'state, (Entity,&'b Neighbors,&'b BlocType,&'b mut BlocFaces), F>)
+pub enum BlocTypeQuery<'a, 'b, 'world, 'state> {
+    Simple(&'a Query<'world, 'state, &'b BlocType>),
+    Mut(&'a Query<'world, 'state, &'b mut BlocType>),
+    Complex1(&'a Query<'world, 'state, (Entity,&'b mut Neighbors,&'b mut BlocType,&'b mut BlocFaces)>),
+    Complex2(&'a Query<'world, 'state, (Entity,&'b Neighbors,&'b BlocType,&'b mut BlocFaces)>)
 }
-impl<F:ReadOnlyWorldQuery> BlocTypeQuery<'_, '_, '_, '_, F> {
+impl BlocTypeQuery<'_, '_, '_, '_> {
     pub fn get(&self, entity: Entity) -> Result<&BlocType, QueryEntityError> {
         match self {
             BlocTypeQuery::Simple(q) => q.get(entity),
@@ -157,12 +157,12 @@ impl<F:ReadOnlyWorldQuery> BlocTypeQuery<'_, '_, '_, '_, F> {
     }
 }
 
-pub fn render_bloc<F: ReadOnlyWorldQuery>(
+pub fn render_bloc(
     bloc_entity: Entity,
     neighbors: &Neighbors,
     old_faces: &mut BlocFaces,
     asset_server: &Res<AssetServer>,
-    bloc_types_query: BlocTypeQuery<F>,
+    bloc_types_query: BlocTypeQuery,
     meshes: &mut ResMut<'_, Assets<Mesh>>,
     materials: &mut ResMut<'_, Assets<StandardMaterial>>,
     cmds: &mut Commands
@@ -170,17 +170,21 @@ pub fn render_bloc<F: ReadOnlyWorldQuery>(
     let r#type = bloc_types_query.get(bloc_entity).unwrap();
     cmds.entity(bloc_entity).despawn_descendants();
     if let BlocType::Air = r#type {
+        cmds.entity(bloc_entity).remove::<Collider>();
         return
     }
     let mut faces: Vec<Entity> = Vec::new();
+    // Remove collider for inside blocs for optimization
+    let mut need_collider = false;
     for direction in Direction::list() {
         let neighbor = match neighbors.get_with_direction(&direction) {
             Some(n) => bloc_types_query.get(n).unwrap(),
-            None => &BlocType::Air
+            None => continue
         };
         if neighbor != &BlocType::Air {
             continue
         }
+        need_collider = true;
         // load the texture
         let texture_handle = asset_server.load(&format!("{}/{}.png", r#type.to_string(), direction.face_to_render_name()));
         
@@ -206,8 +210,15 @@ pub fn render_bloc<F: ReadOnlyWorldQuery>(
         }, FaceMarker, DestructionLevel::Zero, BaseMaterial(material_handle), NextMaterial(None))).id();
         faces.push(id);
     }
-    cmds.entity(bloc_entity).push_children(&faces);
+    let mut cmd = cmds.entity(bloc_entity);
+    cmd.push_children(&faces);
     *old_faces = BlocFaces(faces);
+
+    if need_collider {
+        cmd.insert(Collider::cuboid(SQUARE_UNIT/2.0, SQUARE_UNIT/2.0, SQUARE_UNIT/2.0));
+    } else {
+        cmd.remove::<Collider>();
+    }
 }
 
 pub fn remove_bloc(
@@ -224,41 +235,9 @@ pub fn remove_bloc(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
-    if let Some(n) = &neighbors.up {
-        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
-        n_neighbors.down = None;
-        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
-    }
-    if let Some(n) = &neighbors.down {
-        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
-        n_neighbors.up = None;
-        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
-    }
-    if let Some(n) = &neighbors.left {
-        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
-        n_neighbors.right = None;
-        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
-    }
-    if let Some(n) = &neighbors.right {
-        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
-        n_neighbors.left = None;
-        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
-    }
-    if let Some(n) = &neighbors.front {
-        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
-        n_neighbors.back = None;
-        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
-    }
-    if let Some(n) = &neighbors.back {
-        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
-        n_neighbors.front = None;
-        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
-    }
-
-    let (bloc_entity, mut neighbors, mut faces) = blocs.get_mut(entity).unwrap();
+    let (bloc_entity, mut neighbors_mut, mut faces) = blocs.get_mut(entity).unwrap();
     *blocs_types_query.get_mut(entity).unwrap() = BlocType::Air;
-    cmds.entity(entity).remove::<Collider>();
-    render_bloc(bloc_entity, &mut neighbors, &mut faces, asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
+    render_bloc(bloc_entity, &mut neighbors_mut, &mut faces, asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
 
     let (pos, parent) = blocs_pos_parent_query.get(entity).unwrap();
     let chunk_pos = chunk_pos_query.get(parent.get()).unwrap();
@@ -273,6 +252,31 @@ pub fn remove_bloc(
             entry.changes.insert(*pos, BlocType::Air);
             chunk_saves.0.insert(*chunk_pos, entry);
         }
+    }
+
+    if let Some(n) = &neighbors.up {
+        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
+    }
+    if let Some(n) = &neighbors.down {
+        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
+    }
+    if let Some(n) = &neighbors.left {
+        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
+    }
+    if let Some(n) = &neighbors.right {
+        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
+    }
+    if let Some(n) = &neighbors.front {
+        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
+    }
+    if let Some(n) = &neighbors.back {
+        let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
     }
 }
 
@@ -400,7 +404,7 @@ impl Direction {
     }
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Clone)]
 pub struct ChunkBlocs ([Entity; CHUNK_X*CHUNK_Y*CHUNK_Z]);
 
 impl ChunkBlocs {
@@ -410,7 +414,7 @@ impl ChunkBlocs {
     pub fn new(chunk_pos: ChunkPos, types: &[BlocType; CHUNK_X*CHUNK_Y*CHUNK_Z], cmds: &mut Commands) -> Self {
         let entities = arr![{
             cmds.spawn_empty().id()
-        }; 128]; // CHUNK_X*CHUNK_Y*CHUNK_Z
+        }; 512]; // CHUNK_X*CHUNK_Y*CHUNK_Z
         for x in 0..CHUNK_X as u8 {
             for y in 0..CHUNK_Y as u8 {
                 for z in 0..CHUNK_Z as u8 {
@@ -487,7 +491,7 @@ impl ChunkBlocs {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 pub struct ChunkNeighborsAreLinked {
     up: bool,
     right: bool,
@@ -639,16 +643,18 @@ impl<G: Generator> Chunks<G> {
         };
         self.load_types(pos, &types, cmds);
     }
-    pub fn unload(&mut self, pos: ChunkPos, chunks_query: &Query<(&ChunkBlocs, &ChunkNeighborsAreLinked)>, blocs_query: &mut Query<&mut Neighbors>, cmds: &mut Commands) {
+    pub fn unload(&mut self, pos: ChunkPos, chunks_query: &mut Query<(&ChunkBlocs, &mut ChunkNeighborsAreLinked)>, blocs_query: &mut Query<&mut Neighbors>, cmds: &mut Commands) {
         let entity = *self.get(pos).unwrap();
         let (blocs, nal) = chunks_query.get(entity).unwrap();
+        let blocs = (*blocs).clone();
+        let nal = *nal;
         // up
         if nal.up {
             let mut pos2 = pos;
             pos2.y += 1;
             let entity2 = *self.get(pos2).unwrap();
             let blocs2 = chunks_query.get(entity2).unwrap().0;
-            self.unlink(pos, pos2, blocs, blocs2, blocs_query);
+            self.unlink(pos, pos2, &blocs, blocs2, blocs_query);
         }
         // right
         if nal.right {
@@ -656,7 +662,7 @@ impl<G: Generator> Chunks<G> {
             pos2.x += 1;
             let entity2 = *self.get(pos2).unwrap();
             let blocs2 = chunks_query.get(entity2).unwrap().0;
-            self.unlink(pos, pos2, blocs, blocs2, blocs_query);
+            self.unlink(pos, pos2, &blocs, blocs2, blocs_query);
         }
         // front
         if nal.front {
@@ -664,34 +670,41 @@ impl<G: Generator> Chunks<G> {
             pos2.z += 1;
             let entity2 = *self.get(pos2).unwrap();
             let blocs2 = chunks_query.get(entity2).unwrap().0;
-            self.unlink(pos, pos2, blocs, blocs2, blocs_query);
+            self.unlink(pos, pos2, &blocs, blocs2, blocs_query);
         }
         // down
         let mut pos2 = pos;
         pos2.y -= 1;
-        let entity2 = *self.get(pos2).unwrap();
-        let (blocs2, nal2) = chunks_query.get(entity2).unwrap();
-        if nal2.up {
-            self.unlink(pos, pos2, blocs, blocs2, blocs_query);
+        if let Some(entity2) = self.get(pos2) {
+            let (blocs2, mut nal2) = chunks_query.get_mut(*entity2).unwrap();
+            if nal2.up {
+                self.unlink(pos, pos2, &blocs, blocs2, blocs_query);
+                nal2.up = false;
+            }
         }
         // left
         let mut pos2 = pos;
         pos2.x -= 1;
-        let entity2 = *self.get(pos2).unwrap();
-        let (blocs2, nal2) = chunks_query.get(entity2).unwrap();
-        if nal2.right {
-            self.unlink(pos, pos2, blocs, blocs2, blocs_query);
+        if let Some(entity2) = self.get(pos2) {
+            let (blocs2, mut nal2) = chunks_query.get_mut(*entity2).unwrap();
+            if nal2.right {
+                self.unlink(pos, pos2, &blocs, blocs2, blocs_query);
+                nal2.right = false;
+            }
         }
         // back
         let mut pos2 = pos;
         pos2.z -= 1;
-        let entity2 = *self.get(pos2).unwrap();
-        let (blocs2, nal2) = chunks_query.get(entity2).unwrap();
-        if nal2.front {
-            self.unlink(pos, pos2, blocs, blocs2, blocs_query);
+        if let Some(entity2) = self.get(pos2) {
+            let (blocs2, mut nal2) = chunks_query.get_mut(*entity2).unwrap();
+            if nal2.front {
+                self.unlink(pos, pos2, &blocs, blocs2, blocs_query);
+                nal2.front = false;
+            }
         }
 
         cmds.entity(entity).despawn_recursive();
+        self.inner.remove(&pos);
     }
     /// * Fill the neighbors of the edge blocs for each chunk
     /// * /!\ This assumes that the blocs are already spawned and that the chunks are neighbors
@@ -852,13 +865,16 @@ pub fn link_chunks<G: Generator>(
             }, 2));
         }
         for (pos2, val_to_change) in neighbors {
-            let (pos2, blocs2) = chunks_query.get(
+            let (_, blocs2) = match chunks_query.get(
                 *match chunks.get(pos2) {
                     Some(c) => c,
                     None => continue
                 }
-            ).unwrap();
-            chunks.link(*pos1, *pos2, blocs1, blocs2, &mut blocs_query);
+            ) {
+                Ok(x) => x,
+                Err(_) => continue
+            };
+            chunks.link(*pos1, pos2, blocs1, blocs2, &mut blocs_query);
             match val_to_change {
                 0 => nal.up = true,
                 1 => nal.right = true,

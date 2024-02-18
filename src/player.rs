@@ -4,8 +4,8 @@ use bevy_rapier3d::prelude::*;
 mod head;
 pub use head::{*, Head};
 
-const SPEED: f32 = 0.4;
-const JUMP_SPEED: f32 = 0.11;
+const SPEED: f32 = 6.0;
+const JUMP_SPEED: f32 = 3.0;
 const PLAYER_HITBOX_RADIUS: f32 = 0.33;
 const PLAYER_HITBOX_HEIGHT: f32 = 1.8;
 
@@ -46,9 +46,11 @@ pub struct TouchedGroudLastFrame(bool);
 #[derive(Bundle)]
 pub struct Player {
     collider: Collider,
-    collider_mass_properties: ColliderMassProperties,
-    damping: Damping,
-    gravity_scale: GravityScale,
+    // collider_mass_properties: ColliderMassProperties,
+    // friction: Friction,
+    // damping: Damping,
+    // gravity_scale: GravityScale,
+    kcc: KinematicCharacterController,
     marker: PlayerMarker,
     spatial: SpatialBundle,
     rigid_body: RigidBody,
@@ -64,13 +66,18 @@ pub struct Player {
 impl Player {
     pub fn new() -> Self {
         Self {
-            collider: Collider::cylinder(PLAYER_HITBOX_HEIGHT/2.0, PLAYER_HITBOX_RADIUS), // ::cylinder(PLAYER_HITBOX_HEIGHT/2.0, PLAYER_HITBOX_RADIUS),
-            collider_mass_properties: ColliderMassProperties::Density(0.01),
-            damping: Damping {
-                linear_damping: 3.0,
-                angular_damping: 0.0
+            collider: Collider::round_cylinder((PLAYER_HITBOX_HEIGHT/2.0)-0.1, PLAYER_HITBOX_RADIUS-0.1, 0.1),
+            // collider_mass_properties: ColliderMassProperties::Density(2.0),
+            // friction: Friction { coefficient: 2.5, combine_rule: CoefficientCombineRule::Multiply },
+            // damping: Damping {
+            //     linear_damping: 1.0,
+            //     angular_damping: 0.0
+            // },
+            // gravity_scale: GravityScale(1.0),
+            kcc: KinematicCharacterController {
+                offset: CharacterLength::Absolute(0.05),
+                ..Default::default()
             },
-            gravity_scale: GravityScale(5.0),
             marker: PlayerMarker,
             spatial: SpatialBundle::from_transform(Transform::from_xyz(0.0, 4.5, 0.0)),
             rigid_body: RigidBody::Dynamic,
@@ -93,11 +100,11 @@ impl Player {
 }
 
 pub fn move_player(
-    mut player: Query<(&mut ExternalForce, &mut ExternalImpulse, &Transform, &PlayerKeys, &mut TouchedGroudLastFrame, Entity), With<PlayerMarker>>,
+    mut player: Query<(&mut ExternalForce, &mut ExternalImpulse, &Transform, &PlayerKeys, &mut TouchedGroudLastFrame, &mut KinematicCharacterController, Option<&KinematicCharacterControllerOutput>, &mut Velocity, Entity), With<PlayerMarker>>,
     rapier_ctx: Res<RapierContext>,
     keys: Res<Input<KeyCode>>
 ) {
-    let (mut input_force, mut jump_impulse, pos, player_keys, mut touched_groud_last_frame, player) = player.single_mut();
+    let (mut input_force, mut jump_impulse, pos, player_keys, mut touched_groud_last_frame, mut kcc, kcc_out, mut vel, player) = player.single_mut();
     let mut mov = Vec3::ZERO;
     if keys.pressed(player_keys.forward) || keys.just_pressed(player_keys.forward) {
         mov -= pos.local_z()
@@ -114,12 +121,33 @@ pub fn move_player(
 
     mov = mov.normalize_or_zero() * SPEED;
 
-    input_force.force = mov;
+    dbg!(kcc_out);
+    dbg!(kcc_out.map(|x|x.grounded));
+
+    match kcc_out {
+        Some(kcc_out) => if kcc_out.grounded {
+                kcc.translation = Some(mov);
+                input_force.force = Vec3::ZERO;
+                vel.linvel = Vec3::ZERO;
+            } else {
+                kcc.translation = Some(Vec3::ZERO);
+                input_force.force = mov;
+            },
+        None => {
+            kcc.translation = Some(Vec3::ZERO);
+            input_force.force = mov;
+        }
+    }
+    
+    
+    //kcc.translation = Some(mov);
+    //vel.linvel += mov;
+    //input_force.force = mov;
 
     let ground = rapier_ctx.intersection_with_shape(
         pos.translation + Vec3::new(0.0, -PLAYER_HITBOX_HEIGHT/2.0, 0.0),
         Quat::IDENTITY,
-        &Collider::cylinder(0.01, PLAYER_HITBOX_RADIUS-0.01),
+        &Collider::cylinder(0.1, PLAYER_HITBOX_RADIUS-0.1),
         QueryFilter::default().groups(
             CollisionGroups::new(Group::GROUP_2, Group::GROUP_1)
         )

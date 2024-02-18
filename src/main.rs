@@ -1,4 +1,4 @@
-use bevy::{prelude::*, window::ApplicationLifetime};
+use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
 pub mod blocs;
@@ -24,7 +24,7 @@ fn setup<G: Generator>(
     // directional 'sun' light
     cmds.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
-            shadows_enabled: true,
+            //shadows_enabled: true,
             illuminance: 10000.0,
             color: Color::rgb(1.0, 1.0, 0.75),
             ..default()
@@ -53,12 +53,6 @@ fn render_all(
     blocs_types_query: Query<&BlocType>,
     mut blocs_query: Query<(Entity, &Neighbors, &mut BlocFaces)>
 ) {
-    // for e in ev_app_lifetime.read() {
-    //     if let ApplicationLifetime::Started = e {
-    //         skip = false;
-    //         break;
-    //     }
-    // }
     if ev_render.read().count() > 0 {
         dbg!("render");
         for blocs in chunks_query.iter_mut() {
@@ -68,11 +62,15 @@ fn render_all(
 }
 
 fn main() {
-   let mut app = App::new();
-   app.add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
+    let mut app = App::new();
+    app.add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
+        // .insert_resource(AmbientLight {
+        //     brightness: 0.4,
+        //     ..Default::default()
+        // })
         .add_plugins(bevy_editor_pls::EditorPlugin::default()) // for debug
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
-        .add_plugins(RapierDebugRenderPlugin::default())
+        //.add_plugins(RapierDebugRenderPlugin::default())
         .add_plugins(PlayerPlugin)
         .add_plugins(BlocAndChunkPlugin)
         .add_plugins(GameStatePlugin)
