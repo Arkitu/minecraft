@@ -4,10 +4,14 @@ use bevy_rapier3d::prelude::*;
 mod head;
 pub use head::{*, Head};
 
+use crate::BLOCS_PHYSIC_GROUP;
+
 const SPEED: f32 = 0.08;
 const JUMP_SPEED: f32 = 3.0;
 const PLAYER_HITBOX_RADIUS: f32 = 0.33;
 const PLAYER_HITBOX_HEIGHT: f32 = 1.8;
+
+const PLAYER_PHYSIC_GROUP: Group = Group::GROUP_2;
 
 pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
@@ -92,7 +96,7 @@ impl Player {
             sleeping: Sleeping::disabled(),
             locked_axes: LockedAxes::ROTATION_LOCKED,
             keys: PlayerKeys::default(),
-            collision_groups: CollisionGroups::new(Group::GROUP_2, Group::ALL),
+            collision_groups: CollisionGroups::new(PLAYER_PHYSIC_GROUP, Group::ALL),
             touched_groud_last_frame: TouchedGroudLastFrame(false)
         }
     }
@@ -131,7 +135,7 @@ pub fn move_player(
         Quat::IDENTITY,
         &Collider::cylinder(0.1, PLAYER_HITBOX_RADIUS-0.1),
         QueryFilter::default().groups(
-            CollisionGroups::new(Group::GROUP_2, Group::GROUP_1)
+            CollisionGroups::new(PLAYER_PHYSIC_GROUP, BLOCS_PHYSIC_GROUP)
         )
     );
 

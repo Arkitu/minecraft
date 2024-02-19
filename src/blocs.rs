@@ -8,6 +8,8 @@ pub const CHUNK_Z: usize = 8; // Front
 
 pub const SQUARE_UNIT: f32 = 1.0;
 
+pub const BLOCS_PHYSIC_GROUP: Group = Group::GROUP_1;
+
 pub type DefaultGenerator = FlatWordGenerator;
 
 pub mod cracks;
@@ -168,9 +170,9 @@ pub fn render_bloc(
     cmds: &mut Commands
 ) {
     let r#type = bloc_types_query.get(bloc_entity).unwrap();
-    //cmds.entity(bloc_entity).clear_children();
+    cmds.entity(bloc_entity).despawn_descendants();
     if let BlocType::Air = r#type {
-        cmds.get_entity(bloc_entity).expect("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaaa").remove::<Collider>();
+        cmds.entity(bloc_entity).remove::<Collider>();
         return
     }
     let mut faces: Vec<Entity> = Vec::new();
@@ -210,7 +212,7 @@ pub fn render_bloc(
         }, FaceMarker, DestructionLevel::Zero, BaseMaterial(material_handle), NextMaterial(None))).id();
         faces.push(id);
     }
-    let mut cmd = cmds.get_entity(bloc_entity).expect("ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZz");
+    let mut cmd = cmds.entity(bloc_entity);
     cmd.push_children(&faces);
     *old_faces = BlocFaces(faces);
 
@@ -462,7 +464,7 @@ impl ChunkBlocs {
                         },
                         r#type: types[chunk_index],
                         faces: BlocFaces::default(),
-                        collision_groups: CollisionGroups::new(Group::GROUP_1, Group::ALL)
+                        collision_groups: CollisionGroups::new(BLOCS_PHYSIC_GROUP, Group::complement(BLOCS_PHYSIC_GROUP))
                     };
                     let mut entity = cmds.get_entity(entities[chunk_index]).unwrap();
                     entity.insert(bloc);
@@ -549,7 +551,7 @@ impl Default for FlatWordGenerator {
     }
 }
 impl Generator for FlatWordGenerator {
-    fn generate(&self, pos: ChunkPos) -> [BlocType; CHUNK_X*CHUNK_Y*CHUNK_Z] {
+    fn generate(&self, _: ChunkPos) -> [BlocType; CHUNK_X*CHUNK_Y*CHUNK_Z] {
         let mut types = [BlocType::Air; CHUNK_X*CHUNK_Y*CHUNK_Z];
         for x in 0..CHUNK_X as u8 {
             for z in 0..CHUNK_Z as u8 {

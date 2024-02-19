@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
-use crate::{remove_bloc, BaseMaterial, BlocFaces, BlocType, ChunkSaves, ChunkPos, Cracks, DestructionLevel, FaceMarker, GameState, Neighbors, NextMaterial, PosInChunk};
+use crate::{remove_bloc, BaseMaterial, BlocFaces, BlocType, ChunkPos, ChunkSaves, Cracks, DestructionLevel, FaceMarker, GameState, Neighbors, NextMaterial, PosInChunk, BLOCS_PHYSIC_GROUP};
 
 pub mod camera;
 pub use camera::*;
@@ -88,7 +88,7 @@ pub fn destroy_bloc(
         RANGE,
         true,
         QueryFilter::default().groups(
-            CollisionGroups::new(Group::ALL, Group::GROUP_1)
+            CollisionGroups::new(Group::ALL, BLOCS_PHYSIC_GROUP)
         )
     ) {
         None => return,
