@@ -4,7 +4,7 @@ use bevy_rapier3d::prelude::*;
 mod head;
 pub use head::{*, Head};
 
-const SPEED: f32 = 6.0;
+const SPEED: f32 = 0.08;
 const JUMP_SPEED: f32 = 3.0;
 const PLAYER_HITBOX_RADIUS: f32 = 0.33;
 const PLAYER_HITBOX_HEIGHT: f32 = 1.8;
@@ -40,6 +40,9 @@ impl Default for PlayerKeys {
     }
 }
 
+#[derive(Component, Default, Clone)]
+pub struct PlayerVelocity (Vec3);
+
 #[derive(Component)]
 pub struct TouchedGroudLastFrame(bool);
 
@@ -49,7 +52,8 @@ pub struct Player {
     // collider_mass_properties: ColliderMassProperties,
     // friction: Friction,
     // damping: Damping,
-    // gravity_scale: GravityScale,
+    gravity_scale: GravityScale,
+    vel: PlayerVelocity,
     kcc: KinematicCharacterController,
     marker: PlayerMarker,
     spatial: SpatialBundle,
@@ -67,13 +71,14 @@ impl Player {
     pub fn new() -> Self {
         Self {
             collider: Collider::round_cylinder((PLAYER_HITBOX_HEIGHT/2.0)-0.1, PLAYER_HITBOX_RADIUS-0.1, 0.1),
-            // collider_mass_properties: ColliderMassProperties::Density(2.0),
+            // collider_mass_properties: ColliderMassProperties::Density(1.0),
             // friction: Friction { coefficient: 2.5, combine_rule: CoefficientCombineRule::Multiply },
             // damping: Damping {
             //     linear_damping: 1.0,
             //     angular_damping: 0.0
             // },
-            // gravity_scale: GravityScale(1.0),
+            gravity_scale: GravityScale(4.0),
+            vel: PlayerVelocity::default(),
             kcc: KinematicCharacterController {
                 offset: CharacterLength::Absolute(0.05),
                 ..Default::default()
@@ -100,7 +105,7 @@ impl Player {
 }
 
 pub fn move_player(
-    mut player: Query<(&mut ExternalForce, &mut ExternalImpulse, &Transform, &PlayerKeys, &mut TouchedGroudLastFrame, &mut KinematicCharacterController, Option<&KinematicCharacterControllerOutput>, &mut Velocity, Entity), With<PlayerMarker>>,
+    mut player: Query<(&mut ExternalForce, &mut ExternalImpulse, &Transform, &PlayerKeys, &mut TouchedGroudLastFrame, &mut KinematicCharacterController, Option<&KinematicCharacterControllerOutput>, &mut PlayerVelocity, Entity), With<PlayerMarker>>,
     rapier_ctx: Res<RapierContext>,
     keys: Res<Input<KeyCode>>
 ) {
@@ -119,27 +124,7 @@ pub fn move_player(
         mov -= pos.local_x()
     }
 
-    mov = mov.normalize_or_zero() * SPEED;
-
-    match kcc_out {
-        Some(kcc_out) => if kcc_out.grounded {
-                kcc.translation = Some(mov);
-                input_force.force = Vec3::ZERO;
-                vel.linvel = Vec3::ZERO;
-            } else {
-                kcc.translation = Some(Vec3::new(0.0, -0.001, 0.0));
-                input_force.force = mov;
-            },
-        None => {
-            kcc.translation = Some(Vec3::new(0.0, -0.001, 0.0));
-            input_force.force = mov;
-        }
-    }
-    
-    
-    //kcc.translation = Some(mov);
-    //vel.linvel += mov;
-    //input_force.force = mov;
+    mov = mov.normalize_or_zero();
 
     let ground = rapier_ctx.intersection_with_shape(
         pos.translation + Vec3::new(0.0, -PLAYER_HITBOX_HEIGHT/2.0, 0.0),
@@ -158,8 +143,14 @@ pub fn move_player(
         }
     };
 
-    if keys.pressed(player_keys.jump) && is_on_ground && touched_groud_last_frame.0 {
-        jump_impulse.impulse = Vec3::new(0.0, JUMP_SPEED, 0.0);
+    kcc.translation = Some(mov*SPEED);
+
+    if keys.pressed(player_keys.jump) {
+        if is_on_ground && touched_groud_last_frame.0 {
+            jump_impulse.impulse = Vec3::new(0.0, JUMP_SPEED, 0.0);
+        } else {
+
+        }
     } else {
         jump_impulse.impulse = Vec3::ZERO;
     }

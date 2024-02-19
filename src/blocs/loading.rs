@@ -73,10 +73,3 @@ pub fn render_added_chunks(
         blocs.render(&asset_server, &mut blocs_query, &blocs_types_query, &mut meshes, &mut materials, &mut cmds);
     }
 }
-
-// pub fn remove_orphan_faces(
-//     faces: Query<(Entity, Parent), With<FaceMarker>>,
-//     mut cmds: Commands
-// ) {
-    
-// }
