@@ -121,20 +121,17 @@ pub fn move_player(
 
     mov = mov.normalize_or_zero() * SPEED;
 
-    dbg!(kcc_out);
-    dbg!(kcc_out.map(|x|x.grounded));
-
     match kcc_out {
         Some(kcc_out) => if kcc_out.grounded {
                 kcc.translation = Some(mov);
                 input_force.force = Vec3::ZERO;
                 vel.linvel = Vec3::ZERO;
             } else {
-                kcc.translation = Some(Vec3::ZERO);
+                kcc.translation = Some(Vec3::new(0.0, -0.001, 0.0));
                 input_force.force = mov;
             },
         None => {
-            kcc.translation = Some(Vec3::ZERO);
+            kcc.translation = Some(Vec3::new(0.0, -0.001, 0.0));
             input_force.force = mov;
         }
     }

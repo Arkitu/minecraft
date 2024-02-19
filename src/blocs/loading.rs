@@ -51,7 +51,8 @@ pub fn update_loaded_chunks(
 }
 
 pub fn render_added_chunks(
-    mut chunks_query: Query<&ChunkBlocs, Added<ChunkBlocs>>,
+    mut chunks_query: Query<(&ChunkBlocs, &ChunkPos), Added<ChunkBlocs>>,
+    player: Query<&Transform, With<PlayerMarker>>,
     mut cmds: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -59,7 +60,23 @@ pub fn render_added_chunks(
     blocs_types_query: Query<&BlocType>,
     mut blocs_query: Query<(Entity, &Neighbors, &mut BlocFaces)>
 ) {
-    for blocs in chunks_query.iter_mut() {
+    let player_pos = player.single();
+    let player_chunk = ChunkPos {
+        x: (player_pos.translation.x / (CHUNK_X as f32*SQUARE_UNIT)).round() as i32,
+        y: (player_pos.translation.y / (CHUNK_Y as f32*SQUARE_UNIT)).round() as i32,
+        z: (player_pos.translation.z / (CHUNK_Z as f32*SQUARE_UNIT)).round() as i32
+    };
+    for (blocs, pos) in chunks_query.iter_mut() {
+        if (pos.x - player_chunk.x).saturating_pow(2) as u32 + (pos.z - player_chunk.z).saturating_pow(2) as u32 > RENDER_DISTANCE.pow(2) {
+            continue
+        }
         blocs.render(&asset_server, &mut blocs_query, &blocs_types_query, &mut meshes, &mut materials, &mut cmds);
     }
 }
+
+// pub fn remove_orphan_faces(
+//     faces: Query<(Entity, Parent), With<FaceMarker>>,
+//     mut cmds: Commands
+// ) {
+    
+// }

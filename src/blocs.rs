@@ -168,9 +168,9 @@ pub fn render_bloc(
     cmds: &mut Commands
 ) {
     let r#type = bloc_types_query.get(bloc_entity).unwrap();
-    cmds.entity(bloc_entity).despawn_descendants();
+    //cmds.entity(bloc_entity).clear_children();
     if let BlocType::Air = r#type {
-        cmds.entity(bloc_entity).remove::<Collider>();
+        cmds.get_entity(bloc_entity).expect("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaaa").remove::<Collider>();
         return
     }
     let mut faces: Vec<Entity> = Vec::new();
@@ -210,7 +210,7 @@ pub fn render_bloc(
         }, FaceMarker, DestructionLevel::Zero, BaseMaterial(material_handle), NextMaterial(None))).id();
         faces.push(id);
     }
-    let mut cmd = cmds.entity(bloc_entity);
+    let mut cmd = cmds.get_entity(bloc_entity).expect("ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZz");
     cmd.push_children(&faces);
     *old_faces = BlocFaces(faces);
 
