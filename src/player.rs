@@ -35,10 +35,10 @@ pub struct PlayerKeys {
 impl Default for PlayerKeys {
     fn default() -> Self {
         Self {
-            forward: KeyCode::Z,
-            backward: KeyCode::S,
-            right: KeyCode::D,
-            left: KeyCode::Q,
+            forward: KeyCode::KeyW,
+            backward: KeyCode::KeyS,
+            right: KeyCode::KeyD,
+            left: KeyCode::KeyA,
             jump: KeyCode::Space
         }
     }
@@ -111,21 +111,21 @@ impl Player {
 pub fn move_player(
     mut player: Query<(&mut ExternalForce, &mut ExternalImpulse, &Transform, &PlayerKeys, &mut TouchedGroudLastFrame, &mut KinematicCharacterController, Option<&KinematicCharacterControllerOutput>, &mut PlayerVelocity, Entity), With<PlayerMarker>>,
     rapier_ctx: Res<RapierContext>,
-    keys: Res<Input<KeyCode>>
+    keys: Res<ButtonInput<KeyCode>>
 ) {
     let (mut input_force, mut jump_impulse, pos, player_keys, mut touched_groud_last_frame, mut kcc, kcc_out, mut vel, player) = player.single_mut();
     let mut mov = Vec3::ZERO;
     if keys.pressed(player_keys.forward) || keys.just_pressed(player_keys.forward) {
-        mov -= pos.local_z()
+        mov -= pos.local_z().xyz();
     }
     if keys.pressed(player_keys.backward) {
-        mov += pos.local_z()
+        mov += pos.local_z().xyz();
     }
     if keys.pressed(player_keys.right) {
-        mov += pos.local_x()
+        mov += pos.local_x().xyz();
     }
     if keys.pressed(player_keys.left) {
-        mov -= pos.local_x()
+        mov -= pos.local_x().xyz();
     }
 
     mov = mov.normalize_or_zero();

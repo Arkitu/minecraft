@@ -64,7 +64,7 @@ pub fn destroy_bloc(
     images: Res<Assets<Image>>,
     cracks: Res<Cracks>,
     #[cfg(not(target_arch = "wasm32"))]
-    mouse: Res<Input<MouseButton>>,
+    mouse: Res<ButtonInput<MouseButton>>,
     #[cfg(target_arch = "wasm32")]
     wasm_mouse_tracker: Res<WasmMouseTracker>,
 ) {

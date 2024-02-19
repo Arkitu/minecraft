@@ -68,9 +68,9 @@ fn main() {
         //     brightness: 0.4,
         //     ..Default::default()
         // })
-        .add_plugins(bevy_editor_pls::EditorPlugin::default()) // for debug
+        // .add_plugins(bevy_editor_pls::EditorPlugin::default()) // for debug
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
-        //.add_plugins(RapierDebugRenderPlugin::default())
+        // .add_plugins(RapierDebugRenderPlugin::default())
         .add_plugins(PlayerPlugin)
         .add_plugins(BlocAndChunkPlugin)
         .add_plugins(GameStatePlugin)

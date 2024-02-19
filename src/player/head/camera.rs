@@ -69,7 +69,7 @@ pub fn cursor_grab(
 #[cfg(not(target_arch = "wasm32"))]
 pub fn cursor_release(
     mut q_windows: Query<&mut Window, With<PrimaryWindow>>,
-    keys: Res<Input<KeyCode>>
+    keys: Res<ButtonInput<KeyCode>>
 ) {
     if !keys.just_pressed(KeyCode::Escape) {
         return

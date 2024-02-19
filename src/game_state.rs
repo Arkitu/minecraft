@@ -62,12 +62,12 @@ pub struct GameSave {
 }
 
 pub fn save(
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     game_state: Res<GameState>,
     chunk_saves: Res<ChunkSaves>,
     player: Query<(&Transform, &Velocity), With<PlayerMarker>>
 ) {
-    if !keys.just_pressed(KeyCode::T) {
+    if !keys.just_pressed(KeyCode::KeyT) {
         return
     }
 
@@ -98,7 +98,7 @@ pub fn save(
 }
 
 pub fn load(
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     mut chunks: ResMut<Chunks<DefaultGenerator>>,
     mut game_state: ResMut<GameState>,
     mut chunk_saves: ResMut<ChunkSaves>,
@@ -106,7 +106,7 @@ pub fn load(
     mut cmds: Commands,
     mut ev_render: EventWriter<Render>
 ) {
-    if !keys.just_pressed(KeyCode::Y) {
+    if !keys.just_pressed(KeyCode::KeyY) {
         return
     }
 

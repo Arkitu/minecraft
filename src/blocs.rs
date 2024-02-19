@@ -678,30 +678,33 @@ impl<G: Generator> Chunks<G> {
         let mut pos2 = pos;
         pos2.y -= 1;
         if let Some(entity2) = self.get(pos2) {
-            let (blocs2, mut nal2) = chunks_query.get_mut(*entity2).unwrap();
-            if nal2.up {
-                self.unlink(pos, pos2, &blocs, blocs2, blocs_query);
-                nal2.up = false;
+            if let Ok((blocs2, mut nal2)) = chunks_query.get_mut(*entity2) {
+                if nal2.up {
+                    self.unlink(pos, pos2, &blocs, blocs2, blocs_query);
+                    nal2.up = false;
+                }
             }
         }
         // left
         let mut pos2 = pos;
         pos2.x -= 1;
         if let Some(entity2) = self.get(pos2) {
-            let (blocs2, mut nal2) = chunks_query.get_mut(*entity2).unwrap();
-            if nal2.right {
-                self.unlink(pos, pos2, &blocs, blocs2, blocs_query);
-                nal2.right = false;
+            if let Ok((blocs2, mut nal2)) = chunks_query.get_mut(*entity2) {
+                if nal2.right {
+                    self.unlink(pos, pos2, &blocs, blocs2, blocs_query);
+                    nal2.right = false;
+                }
             }
         }
         // back
         let mut pos2 = pos;
         pos2.z -= 1;
         if let Some(entity2) = self.get(pos2) {
-            let (blocs2, mut nal2) = chunks_query.get_mut(*entity2).unwrap();
-            if nal2.front {
-                self.unlink(pos, pos2, &blocs, blocs2, blocs_query);
-                nal2.front = false;
+            if let Ok((blocs2, mut nal2)) = chunks_query.get_mut(*entity2) {
+                if nal2.front {
+                    self.unlink(pos, pos2, &blocs, blocs2, blocs_query);
+                    nal2.front = false;
+                }
             }
         }
 
