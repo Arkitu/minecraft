@@ -25,7 +25,7 @@ fn setup<G: Generator>(
     cmds.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             //shadows_enabled: true,
-            illuminance: 10000.0,
+            illuminance: 3000.0,
             color: Color::rgb(1.0, 1.0, 0.75),
             ..default()
         },
@@ -43,7 +43,6 @@ fn setup<G: Generator>(
 }
 
 fn render_all(
-    //mut ev_app_lifetime: EventReader<ApplicationLifetime>,
     mut ev_render: EventReader<Render>,
     mut chunks_query: Query<&ChunkBlocs>,
     mut cmds: Commands,
@@ -68,9 +67,9 @@ fn main() {
         //     brightness: 0.4,
         //     ..Default::default()
         // })
-        // .add_plugins(bevy_editor_pls::EditorPlugin::default()) // for debug
+        .add_plugins(bevy_editor_pls::EditorPlugin::default()) // for debug
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
-        // .add_plugins(RapierDebugRenderPlugin::default())
+        // .add_plugins(RapierDebugRenderPlugin::default()) // for debug
         .add_plugins(PlayerPlugin)
         .add_plugins(BlocAndChunkPlugin)
         .add_plugins(GameStatePlugin)
