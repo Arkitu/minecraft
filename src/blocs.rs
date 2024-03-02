@@ -10,12 +10,14 @@ pub const SQUARE_UNIT: f32 = 1.0;
 
 pub const BLOCS_PHYSIC_GROUP: Group = Group::GROUP_1;
 
-pub type DefaultGenerator = FlatWordGenerator;
+pub type DefaultGenerator = generation::Generator;
 
 pub mod cracks;
 pub use cracks::*;
 pub mod loading;
 pub use loading::*;
+pub mod generation;
+pub use generation::*;
 
 use serde::{Deserialize, Serialize};
 
@@ -181,7 +183,11 @@ pub fn render_bloc(
     for direction in Direction::list() {
         let neighbor = match neighbors.get_with_direction(&direction) {
             Some(n) => bloc_types_query.get(n).unwrap(),
-            None => continue
+            None => if direction == Direction::Up {
+                &BlocType::Air
+            } else {
+                continue
+            }
         };
         if neighbor != &BlocType::Air {
             continue
@@ -541,9 +547,11 @@ impl Chunk {
     }
 }
 
-pub trait Generator: Send + std::marker::Sync + 'static + Default {
+pub trait Generator: Send + std::marker::Sync + 'static {
+    fn new(seed: u32) -> Self;
     fn generate(&self, pos: ChunkPos) -> [BlocType; CHUNK_X*CHUNK_Y*CHUNK_Z];
 }
+
 pub struct FlatWordGenerator;
 impl Default for FlatWordGenerator {
     fn default() -> Self {
@@ -551,6 +559,9 @@ impl Default for FlatWordGenerator {
     }
 }
 impl Generator for FlatWordGenerator {
+    fn new(_: u32) -> Self {
+        Self::default()
+    }
     fn generate(&self, _: ChunkPos) -> [BlocType; CHUNK_X*CHUNK_Y*CHUNK_Z] {
         let mut types = [BlocType::Air; CHUNK_X*CHUNK_Y*CHUNK_Z];
         for x in 0..CHUNK_X as u8 {
@@ -574,10 +585,10 @@ pub struct Chunks<G: Generator> {
     pub generator: G
 }
 impl<G: Generator> Chunks<G> {
-    pub fn new() -> Self {
+    pub fn new(seed: u32) -> Self {
         Self {
             inner: HashMap::new(),
-            generator: G::default()
+            generator: G::new(seed)
         }
     }
     pub fn insert(&mut self, pos: ChunkPos, chunk: Entity) {
@@ -714,7 +725,7 @@ impl<G: Generator> Chunks<G> {
     /// * Fill the neighbors of the edge blocs for each chunk
     /// * /!\ This assumes that the blocs are already spawned and that the chunks are neighbors
     /// * Errors if the chunks are not spawned
-    pub fn link(&self, pos1: ChunkPos, pos2: ChunkPos, blocs1: &ChunkBlocs, blocs2: &ChunkBlocs, blocs_query: &mut Query<&mut Neighbors>) {
+    pub fn link(&self, pos1: ChunkPos, pos2: ChunkPos, blocs1: &ChunkBlocs, blocs2: &ChunkBlocs, blocs_query: &mut Query<(&mut Neighbors, &mut BlocFaces)>, asset_server: &Res<AssetServer>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<Assets<Mesh>>, materials: &mut ResMut<Assets<StandardMaterial>>, cmds: &mut Commands) {
         let x_iter = if pos1.x < pos2.x {
             (CHUNK_X as u8-1..=CHUNK_X as u8-1).into_iter().zip(0..=0)
         } else if pos1.x > pos2.x {
@@ -739,30 +750,32 @@ impl<G: Generator> Chunks<G> {
         for x in x_iter {
             for y in y_iter.clone() {
                 for z in z_iter.clone() {
-                    let blocs = (
+                    let entities = (
                         *blocs1.get(&PosInChunk { x: x.0, y: y.0, z: z.0 }).expect("Cannot find bloc 1"),
                         *blocs2.get(&PosInChunk { x: x.1, y: y.1, z: z.1 }).expect("Cannot find bloc 2")
                     );
-                    let mut neighbors = blocs_query.get_many_mut([blocs.0, blocs.1]).expect("Cannot find neighbors");
+                    let mut blocs = blocs_query.get_many_mut([entities.0, entities.1]).expect("Cannot find neighbors");
                     if pos1.x < pos2.x {
-                        neighbors[0].right = Some(blocs.1);
-                        neighbors[1].left = Some(blocs.0);
+                        blocs[0].0.right = Some(entities.1);
+                        blocs[1].0.left = Some(entities.0);
                     } else if pos1.x > pos2.x {
-                        neighbors[0].left = Some(blocs.1);
-                        neighbors[1].right = Some(blocs.0);
+                        blocs[0].0.left = Some(entities.1);
+                        blocs[1].0.right = Some(entities.0);
                     } else if pos1.y < pos2.y {
-                        neighbors[0].up = Some(blocs.1);
-                        neighbors[1].down = Some(blocs.0);
+                        blocs[0].0.up = Some(entities.1);
+                        blocs[1].0.down = Some(entities.0);
                     } else if pos1.y > pos2.y {
-                        neighbors[0].down = Some(blocs.1);
-                        neighbors[1].up = Some(blocs.0);
+                        blocs[0].0.down = Some(entities.1);
+                        blocs[1].0.up = Some(entities.0);
                     } else if pos1.z < pos2.z {
-                        neighbors[0].front = Some(blocs.1);
-                        neighbors[1].back = Some(blocs.0);
+                        blocs[0].0.front = Some(entities.1);
+                        blocs[1].0.back = Some(entities.0);
                     } else if pos1.z > pos2.z {
-                        neighbors[0].back = Some(blocs.1);
-                        neighbors[1].front = Some(blocs.0);
+                        blocs[0].0.back = Some(entities.1);
+                        blocs[1].0.front = Some(entities.0);
                     }
+                    render_bloc(entities.0, &blocs[0].0, &mut blocs[0].1, asset_server, BlocTypeQuery::Simple(bloc_types_query), meshes, materials, cmds);
+                    render_bloc(entities.1, &blocs[1].0, &mut blocs[1].1, asset_server, BlocTypeQuery::Simple(bloc_types_query), meshes, materials, cmds)
                 }
             }
         }
@@ -840,7 +853,12 @@ pub fn link_chunks<G: Generator>(
     chunks: Res<Chunks<G>>,
     mut nal_query: Query<(Entity, &mut ChunkNeighborsAreLinked)>,
     chunks_query: Query<(&ChunkPos, &ChunkBlocs)>,
-    mut blocs_query: Query<&mut Neighbors>
+    mut blocs_query: Query<(&mut Neighbors, &mut BlocFaces)>,
+    asset_server: Res<AssetServer>,
+    bloc_types_query: Query<&BlocType>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut cmds: Commands
 ) {
     for (id, mut nal) in nal_query.iter_mut() {
         if nal.up && nal.right && nal.front {
@@ -879,7 +897,7 @@ pub fn link_chunks<G: Generator>(
                 Ok(x) => x,
                 Err(_) => continue
             };
-            chunks.link(*pos1, pos2, blocs1, blocs2, &mut blocs_query);
+            chunks.link(*pos1, pos2, blocs1, blocs2, &mut blocs_query, &asset_server, &bloc_types_query, &mut meshes, &mut materials, &mut cmds);
             match val_to_change {
                 0 => nal.up = true,
                 1 => nal.right = true,

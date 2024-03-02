@@ -76,7 +76,7 @@ fn main() {
         .add_systems(Startup, setup::<DefaultGenerator>)
         .add_systems(PreUpdate, render_all)
         .add_event::<Render>()
-        .insert_resource(Chunks::<DefaultGenerator>::new());
+        .insert_resource(Chunks::<DefaultGenerator>::new(rand::random()));
 
     app.run();
 }

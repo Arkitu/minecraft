@@ -128,7 +128,10 @@ pub fn destroy_bloc(
         for x in bloc.2.0.iter() {
             let (_, base_mat, mut next_mat, mut destruction_lvl) = faces.get_mut(*x).unwrap();
             let mut material = materials.get(base_mat.0.id()).unwrap().clone();
-            let mut img = images.get(material.base_color_texture.unwrap().id()).unwrap().clone();
+            let mut img = match images.get(material.base_color_texture.unwrap().id()) {
+                Some(img) => img.clone(),
+                None => continue
+            };
             for (i, c) in img.data.chunks_mut(4).zip(crack.data.chunks(4)) {
                 let c3 = c[3] as u16;
                 *i.get_mut(0).unwrap() = (((i[0] as u16 * (255-c3)) + (c[0] as u16 * c3)) / (255)) as u8;
