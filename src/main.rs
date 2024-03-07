@@ -8,9 +8,6 @@ use player::*;
 pub mod game_state;
 use game_state::*;
 
-#[derive(Event)]
-pub struct Render;
-
 fn setup<G: Generator>(
     mut cmds: Commands,
     mut chunks: ResMut<Chunks<G>>,
@@ -42,24 +39,6 @@ fn setup<G: Generator>(
     ev_render.send(Render);
 }
 
-fn render_all(
-    mut ev_render: EventReader<Render>,
-    mut chunks_query: Query<&ChunkBlocs>,
-    mut cmds: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
-    blocs_types_query: Query<&BlocType>,
-    mut blocs_query: Query<(Entity, &Neighbors, &mut BlocFaces)>
-) {
-    if ev_render.read().count() > 0 {
-        dbg!("render");
-        for blocs in chunks_query.iter_mut() {
-            blocs.render(&asset_server, &mut blocs_query, &blocs_types_query, &mut meshes, &mut materials, &mut cmds);
-        }
-    }
-}
-
 fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
@@ -74,7 +53,6 @@ fn main() {
         .add_plugins(BlocAndChunkPlugin)
         .add_plugins(GameStatePlugin)
         .add_systems(Startup, setup::<DefaultGenerator>)
-        .add_systems(PreUpdate, render_all)
         .add_event::<Render>()
         .insert_resource(Chunks::<DefaultGenerator>::new(rand::random()));
 

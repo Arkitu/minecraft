@@ -3,7 +3,7 @@ use bevy_rapier3d::prelude::*;
 use arr_macro::arr;
 
 pub const CHUNK_X: usize = 8; // Right
-pub const CHUNK_Y: usize = 8; // Up
+pub const CHUNK_Y: usize = 16; // Up
 pub const CHUNK_Z: usize = 8; // Front
 
 pub const SQUARE_UNIT: f32 = 1.0;
@@ -169,17 +169,24 @@ pub fn render_bloc(
     bloc_types_query: BlocTypeQuery,
     meshes: &mut ResMut<'_, Assets<Mesh>>,
     materials: &mut ResMut<'_, Assets<StandardMaterial>>,
-    cmds: &mut Commands
+    cmds: &mut Commands,
+    // None: don't touch to the physic / Some<true>: render the physic / Some<false>: don't render the physic
+    overwrite_physic: Option<bool>
 ) {
     let r#type = bloc_types_query.get(bloc_entity).unwrap();
     cmds.entity(bloc_entity).despawn_descendants();
+    // if let Some(false) = overwrite_physic {
+    //     cmds.entity(bloc_entity).remove::<Collider>();
+    // }
     if let BlocType::Air = r#type {
-        cmds.entity(bloc_entity).remove::<Collider>();
+        // if let Some(true) = overwrite_physic {
+        //     cmds.entity(bloc_entity).remove::<Collider>();
+        // }
         return
     }
     let mut faces: Vec<Entity> = Vec::new();
-    // Remove collider for inside blocs for optimization
-    let mut need_collider = false;
+    // Add collider for outside blocs only for optimization
+    let mut needs_new_collider = false;
     for direction in Direction::list() {
         let neighbor = match neighbors.get_with_direction(&direction) {
             Some(n) => bloc_types_query.get(n).unwrap(),
@@ -192,15 +199,16 @@ pub fn render_bloc(
         if neighbor != &BlocType::Air {
             continue
         }
-        need_collider = true;
+        needs_new_collider = overwrite_physic.unwrap_or(false);
         // load the texture
         let texture_handle = asset_server.load(&format!("{}/{}.png", r#type.to_string(), direction.face_to_render_name()));
         
         // create a new quad mesh. this is what we will apply the texture to
-        let quad_handle = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(
-            SQUARE_UNIT,
-            SQUARE_UNIT
-        ))));
+        let quad_handle = meshes.add(
+            Mesh::from(
+                Rectangle::new(SQUARE_UNIT, SQUARE_UNIT)
+            )
+        );
         let material_handle = materials.add(StandardMaterial {
             base_color_texture: Some(texture_handle),
             ..default()
@@ -222,11 +230,45 @@ pub fn render_bloc(
     cmd.push_children(&faces);
     *old_faces = BlocFaces(faces);
 
-    if need_collider {
-        cmd.insert(Collider::cuboid(SQUARE_UNIT/2.0, SQUARE_UNIT/2.0, SQUARE_UNIT/2.0));
-    } else {
-        cmd.remove::<Collider>();
+    // if needs_new_collider {
+    //     cmd.insert(Collider::cuboid(SQUARE_UNIT/2.0, SQUARE_UNIT/2.0, SQUARE_UNIT/2.0));
+    // }
+}
+
+pub fn load_physic(
+    bloc_entity: Entity,
+    neighbors: &Neighbors,
+    bloc_types_query: BlocTypeQuery,
+    cmds: &mut Commands
+) {
+    let r#type = bloc_types_query.get(bloc_entity).unwrap();
+    if let BlocType::Air = r#type {
+        cmds.entity(bloc_entity).remove::<Collider>();
+        return
     }
+    // Add collider for outside blocs only for optimization
+    for direction in Direction::list() {
+        let neighbor = match neighbors.get_with_direction(&direction) {
+            Some(n) => bloc_types_query.get(n).unwrap(),
+            None => if direction == Direction::Up {
+                &BlocType::Air
+            } else {
+                continue
+            }
+        };
+        if neighbor != &BlocType::Air {
+            continue
+        }
+        cmds.entity(bloc_entity).insert(Collider::cuboid(SQUARE_UNIT/2.0, SQUARE_UNIT/2.0, SQUARE_UNIT/2.0));
+        return
+    }
+    cmds.entity(bloc_entity).remove::<Collider>();
+}
+pub fn unload_physic(
+    bloc_entity: Entity,
+    cmds: &mut Commands
+) {
+    cmds.entity(bloc_entity).remove::<Collider>();
 }
 
 pub fn remove_bloc(
@@ -245,7 +287,7 @@ pub fn remove_bloc(
 ) {
     let (bloc_entity, mut neighbors_mut, mut faces) = blocs.get_mut(entity).unwrap();
     *blocs_types_query.get_mut(entity).unwrap() = BlocType::Air;
-    render_bloc(bloc_entity, &mut neighbors_mut, &mut faces, asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
+    render_bloc(bloc_entity, &mut neighbors_mut, &mut faces, asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds, Some(true));
 
     let (pos, parent) = blocs_pos_parent_query.get(entity).unwrap();
     let chunk_pos = chunk_pos_query.get(parent.get()).unwrap();
@@ -264,27 +306,27 @@ pub fn remove_bloc(
 
     if let Some(n) = &neighbors.up {
         let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
-        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds, None);
     }
     if let Some(n) = &neighbors.down {
         let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
-        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds, None);
     }
     if let Some(n) = &neighbors.left {
         let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
-        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds, None);
     }
     if let Some(n) = &neighbors.right {
         let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
-        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds, None);
     }
     if let Some(n) = &neighbors.front {
         let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
-        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds, None);
     }
     if let Some(n) = &neighbors.back {
         let (n_bloc_entity, mut n_neighbors, mut n_faces) = blocs.get_mut(*n).unwrap();
-        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds);
+        render_bloc(n_bloc_entity, &mut n_neighbors, &mut n_faces, &asset_server, BlocTypeQuery::Mut(blocs_types_query), meshes, materials, cmds, None);
     }
 }
 
@@ -422,7 +464,7 @@ impl ChunkBlocs {
     pub fn new(chunk_pos: ChunkPos, types: &[BlocType; CHUNK_X*CHUNK_Y*CHUNK_Z], cmds: &mut Commands) -> Self {
         let entities = arr![{
             cmds.spawn_empty().id()
-        }; 512]; // CHUNK_X*CHUNK_Y*CHUNK_Z
+        }; 1024]; // CHUNK_X*CHUNK_Y*CHUNK_Z
         for x in 0..CHUNK_X as u8 {
             for y in 0..CHUNK_Y as u8 {
                 for z in 0..CHUNK_Z as u8 {
@@ -491,10 +533,21 @@ impl ChunkBlocs {
     pub fn set(&mut self, pos:&PosInChunk, val: Entity) {
         self.0[pos.to_chunk_index()] = val;
     }
-    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(Entity,&Neighbors,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
+    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(Entity,&Neighbors,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands,  physic_overwride: Option<bool>) {
         for bloc in self.0.iter() {
             let (bloc_entity, neighbors,mut faces) = blocs.get_mut(*bloc).expect("Cannot find bloc from chunk");
-            render_bloc(bloc_entity,  neighbors, &mut faces, asset_server, BlocTypeQuery::Simple(bloc_types_query), meshes, materials, cmds);
+            render_bloc(bloc_entity,  neighbors, &mut faces, asset_server, BlocTypeQuery::Simple(bloc_types_query), meshes, materials, cmds, physic_overwride);
+        }
+    }
+    pub fn load_physic(&self, blocs: &Query<(Entity,&Neighbors)>, bloc_types_query: &Query<&BlocType>, cmds: &mut Commands) {
+        for bloc in self.0.iter() {
+            let (bloc_entity, neighbors) = blocs.get(*bloc).expect("Cannot find bloc from chunk");
+            load_physic(bloc_entity,  neighbors, BlocTypeQuery::Simple(bloc_types_query), cmds);
+        }
+    }
+    pub fn unload_physic(&self, cmds: &mut Commands) {
+        for bloc in self.0.iter() {
+            unload_physic(*bloc, cmds);
         }
     }
 }
@@ -542,8 +595,8 @@ impl Chunk {
     pub fn get(&self, pos:&PosInChunk) -> Option<&Entity> {
         self.blocs.get(pos)
     }
-    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(Entity,&Neighbors,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands) {
-        self.blocs.render(asset_server, blocs, bloc_types_query, meshes, materials, cmds);
+    pub fn render(&self, asset_server: &Res<AssetServer>, blocs: &mut Query<(Entity,&Neighbors,&mut BlocFaces)>, bloc_types_query: &Query<&BlocType>, meshes: &mut ResMut<'_, Assets<Mesh>>, materials: &mut ResMut<'_, Assets<StandardMaterial>>, cmds: &mut Commands, physic_overwride: Option<bool>) {
+        self.blocs.render(asset_server, blocs, bloc_types_query, meshes, materials, cmds, physic_overwride);
     }
 }
 
@@ -774,8 +827,8 @@ impl<G: Generator> Chunks<G> {
                         blocs[0].0.back = Some(entities.1);
                         blocs[1].0.front = Some(entities.0);
                     }
-                    render_bloc(entities.0, &blocs[0].0, &mut blocs[0].1, asset_server, BlocTypeQuery::Simple(bloc_types_query), meshes, materials, cmds);
-                    render_bloc(entities.1, &blocs[1].0, &mut blocs[1].1, asset_server, BlocTypeQuery::Simple(bloc_types_query), meshes, materials, cmds)
+                    render_bloc(entities.0, &blocs[0].0, &mut blocs[0].1, asset_server, BlocTypeQuery::Simple(bloc_types_query), meshes, materials, cmds, None);
+                    render_bloc(entities.1, &blocs[1].0, &mut blocs[1].1, asset_server, BlocTypeQuery::Simple(bloc_types_query), meshes, materials, cmds, None)
                 }
             }
         }

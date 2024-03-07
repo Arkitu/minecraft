@@ -11,9 +11,12 @@ pub struct Generator {
 }
 impl GeneratorTrait for Generator {
     fn new(seed: u32) -> Self {
+        let mut height_noise = Fbm::<Perlin>::new(seed);
+        height_noise.frequency *= 0.5;
+        height_noise.octaves = 2;
         Self {
             seed,
-            height_noise: Fbm::<Perlin>::new(seed)
+            height_noise
         }
     }
     fn generate(&self, pos: ChunkPos) -> [BlocType; CHUNK_X*CHUNK_Y*CHUNK_Z] {

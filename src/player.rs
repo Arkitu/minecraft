@@ -4,7 +4,7 @@ use bevy_rapier3d::prelude::*;
 mod head;
 pub use head::{*, Head};
 
-use crate::BLOCS_PHYSIC_GROUP;
+use crate::{BLOCS_PHYSIC_GROUP, CHUNK_Y, SQUARE_UNIT};
 
 const SPEED: f32 = 0.08;
 const JUMP_SPEED: f32 = 3.0;
@@ -88,7 +88,7 @@ impl Player {
                 ..Default::default()
             },
             marker: PlayerMarker,
-            spatial: SpatialBundle::from_transform(Transform::from_xyz(0.0, 4.5, 0.0)),
+            spatial: SpatialBundle::from_transform(Transform::from_xyz(0.0, (CHUNK_Y as f32)*SQUARE_UNIT, 0.0)),
             rigid_body: RigidBody::Dynamic,
             velocity: Velocity::default(),
             input_force: ExternalForce::default(),
