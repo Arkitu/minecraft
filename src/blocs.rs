@@ -38,7 +38,9 @@ pub enum BlocType {
     Dirt,
     Grass,
     Stone,
-    Air
+    Sand,
+    SnowyDirt,
+    Air,
 }
 
 impl Into<&str> for &BlocType {
@@ -47,6 +49,8 @@ impl Into<&str> for &BlocType {
             BlocType::Dirt => "dirt",
             BlocType::Grass => "grass",
             BlocType::Stone => "stone",
+            BlocType::Sand => "sand",
+            BlocType::SnowyDirt => "snowy_dirt",
             BlocType::Air => "air"
         }
     }
