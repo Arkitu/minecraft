@@ -30,7 +30,8 @@ pub struct PlayerKeys {
     backward: KeyCode,
     right: KeyCode,
     left: KeyCode,
-    jump: KeyCode
+    jump: KeyCode,
+    run: KeyCode
 }
 impl Default for PlayerKeys {
     fn default() -> Self {
@@ -39,7 +40,8 @@ impl Default for PlayerKeys {
             backward: KeyCode::KeyS,
             right: KeyCode::KeyD,
             left: KeyCode::KeyA,
-            jump: KeyCode::Space
+            jump: KeyCode::Space,
+            run: KeyCode::ShiftLeft
         }
     }
 }
@@ -62,8 +64,6 @@ pub struct Player {
     marker: PlayerMarker,
     spatial: SpatialBundle,
     rigid_body: RigidBody,
-    velocity: Velocity,
-    input_force: ExternalForce,
     jump_impulse: ExternalImpulse,
     sleeping: Sleeping,
     locked_axes: LockedAxes,
@@ -90,8 +90,6 @@ impl Player {
             marker: PlayerMarker,
             spatial: SpatialBundle::from_transform(Transform::from_xyz(0.0, (CHUNK_Y as f32)*SQUARE_UNIT, 0.0)),
             rigid_body: RigidBody::Dynamic,
-            velocity: Velocity::default(),
-            input_force: ExternalForce::default(),
             jump_impulse: ExternalImpulse::default(),
             sleeping: Sleeping::disabled(),
             locked_axes: LockedAxes::ROTATION_LOCKED,
@@ -109,11 +107,11 @@ impl Player {
 }
 
 pub fn move_player(
-    mut player: Query<(&mut ExternalForce, &mut ExternalImpulse, &Transform, &PlayerKeys, &mut TouchedGroudLastFrame, &mut KinematicCharacterController, Option<&KinematicCharacterControllerOutput>, &mut PlayerVelocity, Entity), With<PlayerMarker>>,
+    mut player: Query<(&mut ExternalImpulse, &Transform, &PlayerKeys, &mut TouchedGroudLastFrame, &mut KinematicCharacterController, Entity), With<PlayerMarker>>,
     rapier_ctx: Res<RapierContext>,
     keys: Res<ButtonInput<KeyCode>>
 ) {
-    let (mut input_force, mut jump_impulse, pos, player_keys, mut touched_groud_last_frame, mut kcc, kcc_out, mut vel, player) = player.single_mut();
+    let (mut jump_impulse, pos, player_keys, mut touched_groud_last_frame, mut kcc, player) = player.single_mut();
     let mut mov = Vec3::ZERO;
     if keys.pressed(player_keys.forward) || keys.just_pressed(player_keys.forward) {
         mov -= pos.local_z().xyz();
@@ -146,6 +144,10 @@ pub fn move_player(
             Some(pair) => pair.has_any_active_contacts()
         }
     };
+
+    if keys.pressed(player_keys.run) || keys.just_pressed(player_keys.run) {
+        mov *= 2.0
+    }
 
     kcc.translation = Some(mov*SPEED);
 

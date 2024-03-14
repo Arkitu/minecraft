@@ -921,7 +921,10 @@ pub fn link_chunks<G: Generator>(
         if nal.up && nal.right && nal.front {
             continue
         }
-        let (pos1, blocs1) = chunks_query.get(id).unwrap();
+        let (pos1, blocs1) = match chunks_query.get(id) {
+            Ok(c) => c,
+            Err(_) => continue
+        };
         let mut neighbors = Vec::new();
         if !nal.up {
             neighbors.push((ChunkPos {
